@@ -13,7 +13,7 @@ double new_rent(double current_rent, double rent_inflation_rate){
 }
 
 // This function calculates the total rent over a period of time, based on the number of times rent is collected per year, the amount that is collected, the total number of years, and the rate at which the rent inflates
-double total_rent(double base_rent, int time_period, int charges_per_year, double rent_inflation_rate){
+double get_total_rent(double base_rent, int time_period, int charges_per_year, double rent_inflation_rate){
     int billing_blocks = time_period * charges_per_year;
     int year(0), ctr(0);
     double total_rent(0), current_rent(base_rent);
@@ -31,7 +31,7 @@ double total_rent(double base_rent, int time_period, int charges_per_year, doubl
 
 //This is a function that alerts the user if the total rent amount projected for the time period the user plans to stay exceeds their budget
 bool rent_flag(double curent_rent, double inflation_rate, int time_period, double charges_per_year, double budget){
-    if (total_rent(curent_rent, time_period, charges_per_year, inflation_rate) > budget){
+    if (get_total_rent(curent_rent, time_period, charges_per_year, inflation_rate) > budget){
         return 1;
     }
     return 0;
@@ -43,7 +43,7 @@ int valid_years(double current_rent, double inflation_rate, double charges_per_y
     double total;
     do{
         valid_years++;
-        total = total_rent(current_rent, valid_years, charges_per_year, inflation_rate);
+        total = get_total_rent(current_rent, valid_years, charges_per_year, inflation_rate);
 
 
         cout << valid_years << " | " << total << " | " << endl;
