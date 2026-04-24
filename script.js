@@ -62,7 +62,7 @@ const BUILDINGS_DB = [
             { stars: 5, date: "Apr 2025", text: "Best landlord I have ever had. Issues are fixed same day. Highly recommend." },
             { stars: 5, date: "Jan 2025", text: "Super quiet, beautiful views, and management genuinely cares about tenants." }
         ]
-    }
+    },
 ];
 
 // Store user-submitted reviews (in memory for Phase 1)
