@@ -48,6 +48,20 @@ const BUILDINGS_DB = [
             { stars: 5, date: "Apr 2025", text: "Best landlord I have ever had. Issues are fixed same day. Highly recommend." },
             { stars: 5, date: "Feb 2025", text: "Super quiet, beautiful views, and management genuinely cares about tenants." }
         ]
+    },
+    {
+        id: 4,
+        name: "A1C Dorms",
+        address: "Saadiyat Island, Abu Dhabi",
+        type: "Apartment",
+        image: "",
+        emoji: "🏡",
+        rating: 4.9,
+        amenities: ["Lake View", "College Life", "Bike Storage"],
+        reviews: [
+            { stars: 5, date: "Apr 2025", text: "Best landlord I have ever had. Issues are fixed same day. Highly recommend." },
+            { stars: 5, date: "Jan 2025", text: "Super quiet, beautiful views, and management genuinely cares about tenants." }
+        ]
     }
 ];
 
