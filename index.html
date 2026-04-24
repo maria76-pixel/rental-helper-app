@@ -4,56 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rental Contract Helper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Lora:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
 <div class="container">
+
+    <!-- HERO -->
     <header class="hero">
-        <p class="hero-badge">Smart Renting Toolkit</p>
+        <span class="hero-badge">Smart Renting Toolkit</span>
         <h1>Rental Contract Helper</h1>
-        <p class="hero-subtitle">Understand legal terms, check building feedback, and estimate rent growth in one place.</p>
+        <p class="hero-subtitle">Understand legal terms, check building feedback, and estimate rent growth — all in one place.</p>
     </header>
 
     <main class="dashboard-grid">
 
-    <!-- Legal Translator -->
-    <section class="card card-legal">
-        <h2>Legal Term Translator</h2>
-        <input type="text" placeholder="Enter legal term..." id="legalInput">
-        <button class="btn btn-legal">Explain Term</button>
-        <p class="result">Explanation will appear here</p>
-    </section>
+        <!-- ── LEGAL TRANSLATOR ── -->
+        <section class="card card-legal">
+            <div class="card-header">
+                <span class="card-icon">📘</span>
+                <div>
+                    <h2>Legal Term Translator</h2>
+                    <p class="card-desc">Paste any confusing clause or pick a common term</p>
+                </div>
+            </div>
 
-    <!-- Building Search -->
-    <section class="card card-building">
-        <h2>Building Search & Reviews</h2>
-        <p class="helper-text">Check what tenants say before you rent</p>
+            <div class="input-row">
+                <input type="text" id="legalInput" placeholder="e.g. indemnification, force majeure…">
+                <button class="btn btn-legal" onclick="explainTerm()">Explain</button>
+            </div>
 
-        <input type="text" placeholder="Enter building name...">
-        <button class="btn btn-building">Find Building</button>
+            <div class="quick-terms">
+                <span class="tag" onclick="quickTerm('indemnification')">Indemnification</span>
+                <span class="tag" onclick="quickTerm('subrogation')">Subrogation</span>
+                <span class="tag" onclick="quickTerm('force majeure')">Force Majeure</span>
+                <span class="tag" onclick="quickTerm('lien')">Lien</span>
+                <span class="tag" onclick="quickTerm('latent defect')">Latent Defect</span>
+                <span class="tag" onclick="quickTerm('habitability')">Habitability</span>
+            </div>
 
-        <div class="reviews">
-            <p>Reviews will appear here</p>
-        </div>
+            <div class="result-box hidden" id="legalResult">
+                <p class="result-label">Explanation</p>
+                <p id="legalText"></p>
+            </div>
+        </section>
 
-        <textarea placeholder="Write anonymous review..."></textarea>
-        <button class="btn btn-building">Submit Review</button>
-    </section>
+        <!-- ── RENT CALCULATOR ── -->
+        <section class="card card-rent">
+            <div class="card-header">
+                <span class="card-icon">📈</span>
+                <div>
+                    <h2>Rent Growth Calculator</h2>
+                    <p class="card-desc">See exactly what you'll pay over time</p>
+                </div>
+            </div>
 
-    <!-- Rent Calculator -->
-    <section class="card card-rent">
-        <h2>Rent Growth Calculator</h2>
-        <input type="number" placeholder="Initial Rent">
-        <input type="number" placeholder="Increase Rate (%)">
-        <input type="number" placeholder="Months">
-        <button class="btn btn-rent">Estimate Total Rent</button>
+            <div class="field-group">
+                <label>Initial Monthly Rent ($)</label>
+                <input type="number" id="initialRent" placeholder="e.g. 1200" min="0">
+            </div>
+            <div class="field-group">
+                <label>Annual Increase Rate (%)</label>
+                <input type="number" id="increaseRate" placeholder="e.g. 5" min="0" max="100" step="0.1">
+            </div>
+            <div class="field-group">
+                <label>Duration (months)</label>
+                <input type="number" id="months" placeholder="e.g. 24" min="1">
+            </div>
 
-        <p class="result">Projected cost will appear here</p>
-    </section>
+            <button class="btn btn-rent" onclick="calculateRent()">Calculate</button>
+
+            <div class="result-box hidden" id="rentResult">
+                <p class="result-label">Projection</p>
+                <div class="rent-stats" id="rentStats"></div>
+                <div class="rent-breakdown" id="rentBreakdown"></div>
+            </div>
+        </section>
+
+        <!-- ── BUILDING SEARCH ── -->
+        <section class="card card-building full-width">
+            <div class="card-header">
+                <span class="card-icon">🏢</span>
+                <div>
+                    <h2>Building Search &amp; Reviews</h2>
+                    <p class="card-desc">Check what real tenants say before you sign</p>
+                </div>
+            </div>
+
+            <div class="search-row">
+                <input type="text" id="buildingInput" placeholder="Enter building name or address…" onkeydown="if(event.key==='Enter') searchBuilding()">
+                <button class="btn btn-building" onclick="searchBuilding()">Search</button>
+            </div>
+
+            <!-- Building results grid -->
+            <div class="buildings-grid" id="buildingsGrid">
+                <p class="placeholder-text">🔍 Search a building to see results and tenant reviews</p>
+            </div>
+
+            <!-- Building detail panel (hidden until a card is clicked) -->
+            <div class="building-detail hidden" id="buildingDetail">
+                <button class="back-btn" onclick="closeDetail()">← Back to results</button>
+                <div class="detail-inner" id="detailInner"></div>
+            </div>
+        </section>
+
     </main>
-</div>
 
+    <footer class="site-footer">
+        <p>Rental Contract Helper &nbsp;·&nbsp; Phase 1 &nbsp;·&nbsp; Backend integration coming in Phase 2</p>
+    </footer>
+</div>
 <script src="script.js"></script>
 </body>
 </html>
