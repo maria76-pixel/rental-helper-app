@@ -25,7 +25,7 @@ const BUILDINGS_DB = [
         name: "Greenview Tower",
         address: "78 Elm Avenue, Midtown",
         type: "Condo",
-        image: "",
+        image: "housing-satire.jpg",
         emoji: "🏢",
         rating: 3.5,
         amenities: ["Concierge", "Rooftop"],
