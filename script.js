@@ -6,7 +6,7 @@
 // ── Building data ─────────────────────────────────────────────────────────
 // To add a building: copy one block and change the values.
 // To add a photo:    set image to a filename, e.g. "photos/sunrise.jpg"
-//                    Leave it "" to use the emoji instead.
+//                    Leave "" to use the emoji instead.
 
 const BUILDINGS = [
     {
@@ -42,7 +42,7 @@ const BUILDINGS = [
         sqft: 1200,
         available: true,
         amenities: ["24/7 Concierge", "Rooftop Terrace", "Pool", "Gym", "Underground Parking"],
-        description: "Modern high-rise with panoramic city views and upscale finishes. Ideal for professionals. Note: the elevator had ongoing maintenance issues in 2024 — worth asking management about the current status.",
+        description: "Modern high-rise with panoramic city views and upscale finishes. Ideal for professionals. Note: the elevator had ongoing maintenance issues in 2024 — worth asking management about current status.",
         reviews: [
             { stars: 2, date: "Feb 2025", text: "Landlord ignored multiple requests about the broken elevator for weeks." },
             { stars: 4, date: "Dec 2024", text: "Great views and modern interiors. Street noise can be an issue at night." },
@@ -90,8 +90,11 @@ const BUILDINGS = [
 ];
 
 // User-submitted reviews — stored in memory for Phase 1
-// Phase 2: replace with database calls
 const userReviews = {};
+
+// Deadlines list — stored in memory for Phase 1
+let deadlines = [];
+let deadlineIdCounter = 0;
 
 // Currently open building id
 let currentId = null;
@@ -114,14 +117,14 @@ function goBack() {
 
 const LEGAL_TERMS = {
     "indemnification": "This clause means you agree to protect the landlord from financial loss caused by your actions. For example, if a guest is injured in your apartment and sues, you — not the landlord — would be responsible for covering those costs.",
-    "subrogation": "If your insurance company pays out for a loss (such as a flood), this clause allows them to sue the party responsible on your behalf to recover that money. It prevents you from claiming insurance and also suing the same party separately.",
+    "subrogation": "If your insurance company pays out for a loss (such as a flood), this clause allows them to sue the responsible party on your behalf to recover that money. It prevents you from claiming insurance and also suing the same party separately.",
     "force majeure": "A 'no blame' clause that excuses either party from fulfilling their obligations if an extraordinary and unforeseeable event occurs — such as a natural disaster, pandemic, or government-ordered shutdown.",
-    "lien": "A legal claim or hold placed on a property. If a building carries a lien, it means a third party — such as a bank or contractor — has an outstanding financial stake in it. This could affect your tenancy if the landlord defaults on payments.",
+    "lien": "A legal claim or hold placed on a property. If the building carries a lien, a third party — such as a bank or contractor — has an outstanding financial stake in it. This could affect your tenancy if the landlord defaults on payments.",
     "latent defect": "A hidden flaw in the property that was not visible during a standard inspection — for example, mold behind walls, faulty electrical wiring, or structural damage. If the landlord knew about it and did not disclose it, you may have legal grounds for compensation.",
     "habitability": "Your legal right to a safe, clean, and livable home. Landlords are legally required to maintain working plumbing, heating, structural integrity, and pest control. If they fail to do so, you may be entitled to withhold rent or terminate the lease depending on local law.",
     "subletting": "Renting your unit to another person while you remain the primary tenant on the lease. Many contracts either forbid this entirely or require the landlord's written approval before you may do so.",
-    "easement": "A legal right that allows a third party to use a specific portion of the rented property for a defined purpose — such as a utility company accessing pipes through a shared corridor.",
     "default": "When one party fails to meet a legal obligation under the contract — most commonly the tenant not paying rent on time. Default can trigger late fees, penalty clauses, or eviction proceedings depending on the terms.",
+    "easement": "A legal right that allows a third party to use a specific portion of the rented property for a defined purpose — such as a utility company accessing pipes through a shared corridor.",
     "escrow": "Money held by a neutral third party — often a bank — until a specific condition is met. Security deposits are sometimes held in escrow to protect both the tenant and the landlord from disputes."
 };
 
@@ -147,22 +150,82 @@ function explainTerm() {
 }
 
 
-// ── RENT GROWTH CALCULATOR ────────────────────────────────────────────────
+// ── TENANT RIGHTS PANEL ───────────────────────────────────────────────────
+
+function toggleRights() {
+    const list    = document.getElementById("rightsList");
+    const chevron = document.getElementById("rightsChevron");
+    const isHidden = list.classList.contains("hidden");
+    list.classList.toggle("hidden", !isHidden);
+    chevron.classList.toggle("open", isHidden);
+}
+
+
+// ── RENT GROWTH CALCULATOR + BUDGET EVALUATOR ─────────────────────────────
 
 function calculateRent() {
     const initial = parseFloat(document.getElementById("initialRent").value);
     const rate    = parseFloat(document.getElementById("increaseRate").value);
     const months  = parseInt(document.getElementById("months").value);
+    const budget  = parseFloat(document.getElementById("userBudget").value) || null;
 
     if (!initial || initial <= 0 || isNaN(rate) || !months || months < 1) {
-        alert("Please fill in all three fields with valid numbers."); return;
+        alert("Please fill in the first three fields with valid numbers."); return;
     }
     if (initial > 1000000 || rate > 100 || months > 600) {
         alert("Please use realistic values: rent ≤ $1,000,000  ·  rate ≤ 100%  ·  months ≤ 600."); return;
     }
 
-    renderRentResult("rentStats", "rentBreakdown", "rentResult", initial, rate, months);
+    const { total, finalRent, rows } = projectRent(initial, rate, months);
+    const pct = (((finalRent - initial) / initial) * 100).toFixed(1);
+
+    // Budget alert
+    const alertEl = document.getElementById("budgetAlert");
+    if (budget && budget > 0) {
+        if (total > budget) {
+            const over = total - budget;
+            alertEl.className = "budget-alert over";
+            alertEl.innerHTML = `<span class="alert-icon">⚠️</span>
+                <span>Your projected total of <strong>$${fmt(total)}</strong> exceeds your budget by <strong>$${fmt(over)}</strong>. See below for how long you can afford this rent.</span>`;
+            alertEl.classList.remove("hidden");
+        } else {
+            const under = budget - total;
+            alertEl.className = "budget-alert ok";
+            alertEl.innerHTML = `<span class="alert-icon">✅</span>
+                <span>This rent fits your budget. You will have <strong>$${fmt(under)}</strong> to spare over the full term.</span>`;
+            alertEl.classList.remove("hidden");
+        }
+    } else {
+        alertEl.classList.add("hidden");
+    }
+
+    // Stats pills
+    document.getElementById("rentStats").innerHTML = `
+        <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
+        <div class="stat-pill"><span class="stat-val">$${fmt(finalRent)}</span><span class="stat-key">Final Monthly</span></div>
+        <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Total Increase</span></div>
+    `;
+
+    // Feasible duration
+    const feasibleEl = document.getElementById("feasibleRow");
+    if (budget && budget > 0 && total > budget) {
+        const maxMonths = feasibleDuration(initial, rate, budget);
+        feasibleEl.innerHTML = `⏱️ With your budget of <strong>$${fmt(budget)}</strong>, you can afford this rent for a maximum of <strong>${maxMonths} month${maxMonths !== 1 ? "s" : ""}</strong> (${(maxMonths / 12).toFixed(1)} years).`;
+        feasibleEl.classList.remove("hidden");
+    } else {
+        feasibleEl.classList.add("hidden");
+    }
+
+    // Breakdown table
+    document.getElementById("rentBreakdown").innerHTML = buildTable(rows);
+
+    const box = document.getElementById("rentResult");
+    box.classList.remove("hidden");
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
+
+
+// ── QUICK CALC (building detail page) ────────────────────────────────────
 
 function quickCalc() {
     const building = BUILDINGS.find(b => b.id === currentId);
@@ -170,33 +233,98 @@ function quickCalc() {
 
     const rate   = parseFloat(document.getElementById("quickRate").value);
     const months = parseInt(document.getElementById("quickMonths").value);
+    const budget = parseFloat(document.getElementById("quickBudget").value) || null;
 
     if (isNaN(rate) || !months || months < 1) {
-        alert("Please fill in both fields."); return;
+        alert("Please fill in the rate and duration fields."); return;
     }
 
-    renderQuickResult(building.monthlyRent, rate, months);
+    const initial = building.monthlyRent;
+    const { total, finalRent, rows } = projectRent(initial, rate, months);
+    const pct = (((finalRent - initial) / initial) * 100).toFixed(1);
+
+    // Budget alert
+    const alertEl = document.getElementById("quickBudgetAlert");
+    if (budget && budget > 0) {
+        if (total > budget) {
+            const over = total - budget;
+            alertEl.className = "budget-alert over";
+            alertEl.innerHTML = `<span class="alert-icon">⚠️</span>
+                <span>Total <strong>$${fmt(total)}</strong> exceeds your budget by <strong>$${fmt(over)}</strong>.</span>`;
+            alertEl.classList.remove("hidden");
+        } else {
+            alertEl.className = "budget-alert ok";
+            alertEl.innerHTML = `<span class="alert-icon">✅</span>
+                <span>This rent fits your budget — <strong>$${fmt(budget - total)}</strong> to spare.</span>`;
+            alertEl.classList.remove("hidden");
+        }
+    } else {
+        alertEl.classList.add("hidden");
+    }
+
+    document.getElementById("quickResultText").innerHTML = `
+        <div class="rent-stats" style="margin-bottom:0">
+            <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
+            <div class="stat-pill"><span class="stat-val">$${fmt(finalRent)}</span><span class="stat-key">Final Monthly</span></div>
+            <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Increase</span></div>
+        </div>
+    `;
+
+    // Feasible duration
+    const feasibleEl = document.getElementById("quickFeasibleRow");
+    if (budget && budget > 0 && total > budget) {
+        const maxMonths = feasibleDuration(initial, rate, budget);
+        feasibleEl.innerHTML = `⏱️ Max affordable duration: <strong>${maxMonths} month${maxMonths !== 1 ? "s" : ""}</strong> (${(maxMonths / 12).toFixed(1)} yrs)`;
+        feasibleEl.classList.remove("hidden");
+    } else {
+        feasibleEl.classList.add("hidden");
+    }
+
+    document.getElementById("quickResult").classList.remove("hidden");
 }
 
-function renderRentResult(statsId, breakdownId, boxId, initial, rate, months) {
+
+// ── SHARED RENT CALCULATION HELPERS ──────────────────────────────────────
+
+// Core projection engine — mirrors the C++ logic from the report
+function projectRent(initial, rate, months) {
     let total = 0, rent = initial, rows = [];
 
     for (let m = 1; m <= months; m++) {
+        // Apply annual increase at the start of each new year (after month 12, 24…)
         if (m > 1 && (m - 1) % 12 === 0) rent *= (1 + rate / 100);
         total += rent;
+
+        // Collect a snapshot at the end of each year and at the final month
         if (m % 12 === 0 || m === months) {
-            rows.push({ label: m % 12 === 0 ? "Year " + (m / 12) : "Month " + m, rent, total });
+            rows.push({
+                label: m % 12 === 0 ? "Year " + (m / 12) : "Month " + m + " (partial)",
+                rent,
+                total
+            });
         }
     }
 
-    const pct = initial > 0 ? (((rent - initial) / initial) * 100).toFixed(1) : "0.0";
+    return { total, finalRent: rent, rows };
+}
 
-    document.getElementById(statsId).innerHTML = `
-        <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
-        <div class="stat-pill"><span class="stat-val">$${fmt(rent)}</span><span class="stat-key">Final Monthly</span></div>
-        <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Total Increase</span></div>
-    `;
+// Feasible duration — mirrors valid_years() from the report
+// Returns the maximum number of months affordable within a given budget
+function feasibleDuration(initial, rate, budget) {
+    let total = 0, rent = initial, months = 0;
 
+    while (true) {
+        months++;
+        if (months > 1 && (months - 1) % 12 === 0) rent *= (1 + rate / 100);
+        total += rent;
+        if (total > budget || months >= 600) break;
+    }
+
+    // Step back one — the month that pushed us over is not affordable
+    return Math.max(0, months - 1);
+}
+
+function buildTable(rows) {
     let tbl = `<table class="breakdown-table">
         <thead><tr><th>Period</th><th>Monthly Rent</th><th>Cumulative Total</th></tr></thead>
         <tbody>`;
@@ -204,34 +332,104 @@ function renderRentResult(statsId, breakdownId, boxId, initial, rate, months) {
         tbl += `<tr><td>${r.label}</td><td>$${fmt(r.rent)}</td><td>$${fmt(r.total)}</td></tr>`;
     });
     tbl += "</tbody></table>";
-
-    document.getElementById(breakdownId).innerHTML = tbl;
-    document.getElementById(boxId).classList.remove("hidden");
-    document.getElementById(boxId).scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-function renderQuickResult(initial, rate, months) {
-    let total = 0, rent = initial;
-
-    for (let m = 1; m <= months; m++) {
-        if (m > 1 && (m - 1) % 12 === 0) rent *= (1 + rate / 100);
-        total += rent;
-    }
-
-    const pct = initial > 0 ? (((rent - initial) / initial) * 100).toFixed(1) : "0.0";
-
-    document.getElementById("quickResultText").innerHTML = `
-        <div class="rent-stats" style="margin-bottom:0">
-            <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
-            <div class="stat-pill"><span class="stat-val">$${fmt(rent)}</span><span class="stat-key">Final Monthly</span></div>
-            <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Increase</span></div>
-        </div>
-    `;
-    document.getElementById("quickResult").classList.remove("hidden");
+    return tbl;
 }
 
 function fmt(n) {
     return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+
+// ── DEADLINE & RENEWAL TRACKER ────────────────────────────────────────────
+
+const DEADLINE_ICONS = {
+    renewal:    "🔄",
+    payment:    "💳",
+    inspection: "🔍",
+    notice:     "📨",
+    other:      "📌"
+};
+
+function addDeadline() {
+    const label = document.getElementById("deadlineLabel").value.trim();
+    const date  = document.getElementById("deadlineDate").value;
+    const type  = document.getElementById("deadlineType").value;
+
+    if (!label) { shake(document.getElementById("deadlineLabel")); return; }
+    if (!date)  { shake(document.getElementById("deadlineDate"));  return; }
+
+    deadlines.push({ id: ++deadlineIdCounter, label, date, type });
+
+    // Sort by date ascending
+    deadlines.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Reset form
+    document.getElementById("deadlineLabel").value = "";
+    document.getElementById("deadlineDate").value  = "";
+
+    renderDeadlines();
+}
+
+function removeDeadline(id) {
+    deadlines = deadlines.filter(d => d.id !== id);
+    renderDeadlines();
+}
+
+function renderDeadlines() {
+    const list = document.getElementById("trackerList");
+
+    if (!deadlines.length) {
+        list.innerHTML = `<p class="tracker-empty">No deadlines yet — add one to get started</p>`;
+        return;
+    }
+
+    list.innerHTML = deadlines.map(d => {
+        const today     = new Date(); today.setHours(0,0,0,0);
+        const target    = new Date(d.date + "T00:00:00");
+        const diffMs    = target - today;
+        const diffDays  = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+        let urgencyClass, countdownClass, countdownText;
+
+        if (diffDays < 0) {
+            urgencyClass   = "past";
+            countdownClass = "countdown-past";
+            countdownText  = `${Math.abs(diffDays)}d ago`;
+        } else if (diffDays <= 7) {
+            urgencyClass   = "urgent";
+            countdownClass = "countdown-urgent";
+            countdownText  = diffDays === 0 ? "Today!" : `${diffDays}d left`;
+        } else if (diffDays <= 30) {
+            urgencyClass   = "soon";
+            countdownClass = "countdown-soon";
+            countdownText  = `${diffDays}d left`;
+        } else {
+            urgencyClass   = "future";
+            countdownClass = "countdown-future";
+            // Show in weeks or months for distant dates
+            if (diffDays >= 60) {
+                const months = Math.round(diffDays / 30);
+                countdownText = `~${months}mo`;
+            } else {
+                const weeks = Math.round(diffDays / 7);
+                countdownText = `~${weeks}wk`;
+            }
+        }
+
+        const formattedDate = target.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        const icon = DEADLINE_ICONS[d.type] || "📌";
+
+        return `
+        <div class="deadline-item ${urgencyClass}">
+            <span class="deadline-type-icon">${icon}</span>
+            <div class="deadline-info">
+                <p class="deadline-label">${esc(d.label)}</p>
+                <p class="deadline-date">${formattedDate}</p>
+            </div>
+            <span class="deadline-countdown ${countdownClass}">${countdownText}</span>
+            <button class="deadline-delete" onclick="removeDeadline(${d.id})" title="Remove">✕</button>
+        </div>`;
+    }).join("");
 }
 
 
@@ -303,12 +501,12 @@ function openBuilding(id) {
     document.getElementById("bBadges").innerHTML =
         `<span class="badge badge-type">${esc(b.type)}</span>${availBadge}`;
 
-    // Name, address, description
+    // Info
     document.getElementById("bName").textContent    = b.name;
     document.getElementById("bAddress").textContent = "📍 " + b.address;
     document.getElementById("bDesc").textContent    = b.description;
 
-    // Rating row
+    // Rating
     document.getElementById("bRatingRow").innerHTML = avg > 0
         ? `<span class="b-rating-num">${avg.toFixed(1)}</span>
            <span class="b-rating-stars" style="color:#f59e0b">${starHTML(avg)}</span>
@@ -343,20 +541,18 @@ function openBuilding(id) {
     renderReviews(all);
 
     // Reset review form
-    document.getElementById("reviewText").value    = "";
-    document.getElementById("ratingValue").value   = "0";
+    document.getElementById("reviewText").value       = "";
+    document.getElementById("ratingValue").value      = "0";
     document.getElementById("submitNote").textContent = "";
     document.querySelectorAll("#starRating .star").forEach(s => s.classList.remove("active"));
 
     // Reset quick calculator
     document.getElementById("quickRate").value   = "";
     document.getElementById("quickMonths").value = "";
+    document.getElementById("quickBudget").value = "";
     document.getElementById("quickResult").classList.add("hidden");
 
-    // Wire up star rating
     initStars();
-
-    // Navigate to detail page
     goTo("page-building");
 }
 
@@ -423,7 +619,7 @@ function initStars() {
         });
         star.addEventListener("click", () => {
             input.value = star.dataset.val;
-            const sel = parseInt(input.value);
+            const sel   = parseInt(input.value);
             stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= sel));
         });
     });
