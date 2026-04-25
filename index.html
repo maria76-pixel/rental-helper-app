@@ -5,116 +5,222 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rental Contract Helper</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Lora:wght@600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Lora:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="container">
 
-    <!-- HERO -->
+<!-- ══════════════════════════════════════════
+     PAGE: DASHBOARD (default view)
+══════════════════════════════════════════ -->
+<div id="page-dashboard" class="page active">
+
     <header class="hero">
-        <span class="hero-badge">Smart Renting Toolkit</span>
-        <h1>Rental Contract Helper</h1>
-        <p class="hero-subtitle">Understand legal terms, check building feedback, and estimate rent growth — all in one place.</p>
+        <div class="hero-inner">
+            <span class="hero-badge">Smart Renting Toolkit</span>
+            <h1>Rental Contract Helper</h1>
+            <p class="hero-subtitle">Understand legal terms, check building feedback, and estimate rent growth — all in one place.</p>
+        </div>
     </header>
 
-    <main class="dashboard-grid">
+    <main class="container">
+        <div class="dashboard-grid">
 
-        <!-- ── LEGAL TRANSLATOR ── -->
-        <section class="card card-legal">
-            <div class="card-header">
-                <span class="card-icon">📘</span>
-                <div>
-                    <h2>Legal Term Translator</h2>
-                    <p class="card-desc">Paste any confusing clause or pick a common term</p>
+            <!-- Legal Translator -->
+            <section class="card card-legal">
+                <div class="card-header">
+                    <span class="card-icon">📘</span>
+                    <div>
+                        <h2>Legal Term Translator</h2>
+                        <p class="card-desc">Paste any confusing clause or tap a common term below</p>
+                    </div>
                 </div>
-            </div>
-
-            <div class="input-row">
-                <input type="text" id="legalInput" placeholder="e.g. indemnification, force majeure…">
-                <button class="btn btn-legal" onclick="explainTerm()">Explain</button>
-            </div>
-
-            <div class="quick-terms">
-                <span class="tag" onclick="quickTerm('indemnification')">Indemnification</span>
-                <span class="tag" onclick="quickTerm('subrogation')">Subrogation</span>
-                <span class="tag" onclick="quickTerm('force majeure')">Force Majeure</span>
-                <span class="tag" onclick="quickTerm('lien')">Lien</span>
-                <span class="tag" onclick="quickTerm('latent defect')">Latent Defect</span>
-                <span class="tag" onclick="quickTerm('habitability')">Habitability</span>
-            </div>
-
-            <div class="result-box hidden" id="legalResult">
-                <p class="result-label">Explanation</p>
-                <p id="legalText"></p>
-            </div>
-        </section>
-
-        <!-- ── RENT CALCULATOR ── -->
-        <section class="card card-rent">
-            <div class="card-header">
-                <span class="card-icon">📈</span>
-                <div>
-                    <h2>Rent Growth Calculator</h2>
-                    <p class="card-desc">See exactly what you'll pay over time</p>
+                <div class="input-row">
+                    <input type="text" id="legalInput" placeholder="e.g. indemnification, force majeure…"
+                           onkeydown="if(event.key==='Enter') explainTerm()">
+                    <button class="btn btn-legal" onclick="explainTerm()">Explain</button>
                 </div>
-            </div>
-
-            <div class="field-group">
-                <label>Initial Monthly Rent ($)</label>
-                <input type="number" id="initialRent" placeholder="e.g. 1200" min="0">
-            </div>
-            <div class="field-group">
-                <label>Annual Increase Rate (%)</label>
-                <input type="number" id="increaseRate" placeholder="e.g. 5" min="0" max="100" step="0.1">
-            </div>
-            <div class="field-group">
-                <label>Duration (months)</label>
-                <input type="number" id="months" placeholder="e.g. 24" min="1">
-            </div>
-
-            <button class="btn btn-rent" onclick="calculateRent()">Calculate</button>
-
-            <div class="result-box hidden" id="rentResult">
-                <p class="result-label">Projection</p>
-                <div class="rent-stats" id="rentStats"></div>
-                <div class="rent-breakdown" id="rentBreakdown"></div>
-            </div>
-        </section>
-
-        <!-- ── BUILDING SEARCH ── -->
-        <section class="card card-building full-width">
-            <div class="card-header">
-                <span class="card-icon">🏢</span>
-                <div>
-                    <h2>Building Search &amp; Reviews</h2>
-                    <p class="card-desc">Check what real tenants say before you sign</p>
+                <div class="quick-terms">
+                    <span class="tag" onclick="quickTerm('indemnification')">Indemnification</span>
+                    <span class="tag" onclick="quickTerm('subrogation')">Subrogation</span>
+                    <span class="tag" onclick="quickTerm('force majeure')">Force Majeure</span>
+                    <span class="tag" onclick="quickTerm('lien')">Lien</span>
+                    <span class="tag" onclick="quickTerm('latent defect')">Latent Defect</span>
+                    <span class="tag" onclick="quickTerm('habitability')">Habitability</span>
+                    <span class="tag" onclick="quickTerm('subletting')">Subletting</span>
+                    <span class="tag" onclick="quickTerm('default')">Default</span>
                 </div>
-            </div>
+                <div class="result-box hidden" id="legalResult">
+                    <span class="result-label">📖 Explanation</span>
+                    <p id="legalText"></p>
+                </div>
+            </section>
 
-            <div class="search-row">
-                <input type="text" id="buildingInput" placeholder="Enter building name or address…" onkeydown="if(event.key==='Enter') searchBuilding()">
-                <button class="btn btn-building" onclick="searchBuilding()">Search</button>
-            </div>
+            <!-- Rent Calculator -->
+            <section class="card card-rent">
+                <div class="card-header">
+                    <span class="card-icon">📈</span>
+                    <div>
+                        <h2>Rent Growth Calculator</h2>
+                        <p class="card-desc">See exactly what you'll pay over the full term</p>
+                    </div>
+                </div>
+                <div class="field-group">
+                    <label>Initial Monthly Rent ($)</label>
+                    <input type="number" id="initialRent" placeholder="e.g. 1200" min="0">
+                </div>
+                <div class="field-group">
+                    <label>Annual Increase Rate (%)</label>
+                    <input type="number" id="increaseRate" placeholder="e.g. 5" min="0" max="100" step="0.1">
+                </div>
+                <div class="field-group">
+                    <label>Duration (months)</label>
+                    <input type="number" id="months" placeholder="e.g. 24" min="1">
+                </div>
+                <button class="btn btn-rent" onclick="calculateRent()">Calculate Projection</button>
+                <div class="result-box hidden" id="rentResult">
+                    <span class="result-label">📊 Projection</span>
+                    <div class="rent-stats" id="rentStats"></div>
+                    <div class="rent-breakdown" id="rentBreakdown"></div>
+                </div>
+            </section>
 
-            <!-- Building results grid -->
-            <div class="buildings-grid" id="buildingsGrid">
-                <p class="placeholder-text">🔍 Search a building to see results and tenant reviews</p>
-            </div>
+            <!-- Building Search -->
+            <section class="card card-building full-width">
+                <div class="card-header">
+                    <span class="card-icon">🏢</span>
+                    <div>
+                        <h2>Building Search &amp; Reviews</h2>
+                        <p class="card-desc">Search a building and click any result to see full details, cost, and tenant reviews</p>
+                    </div>
+                </div>
+                <div class="search-row">
+                    <input type="text" id="buildingInput"
+                           placeholder="Search by name, address, or type (e.g. studio, condo)…"
+                           onkeydown="if(event.key==='Enter') searchBuilding()">
+                    <button class="btn btn-building" onclick="searchBuilding()">Search</button>
+                </div>
+                <div class="buildings-grid" id="buildingsGrid">
+                    <p class="placeholder-text">🔍 Search a building above to see results</p>
+                </div>
+            </section>
 
-            <!-- Building detail panel (hidden until a card is clicked) -->
-            <div class="building-detail hidden" id="buildingDetail">
-                <button class="back-btn" onclick="closeDetail()">← Back to results</button>
-                <div class="detail-inner" id="detailInner"></div>
-            </div>
-        </section>
-
+        </div>
     </main>
 
     <footer class="site-footer">
         <p>Rental Contract Helper &nbsp;·&nbsp; Phase 1 &nbsp;·&nbsp; Backend integration coming in Phase 2</p>
     </footer>
+
 </div>
+
+
+<!-- ══════════════════════════════════════════
+     PAGE: BUILDING DETAIL (slides in)
+══════════════════════════════════════════ -->
+<div id="page-building" class="page">
+
+    <div class="detail-nav">
+        <button class="back-btn" onclick="goBack()">
+            <span class="back-arrow">←</span> Back to Search
+        </button>
+        <span class="detail-nav-brand">Rental Contract Helper</span>
+    </div>
+
+    <div class="container">
+
+        <!-- Hero banner -->
+        <div class="b-hero" id="bHero">
+            <div class="b-hero-img" id="bHeroImg">🏢</div>
+            <div class="b-hero-info">
+                <div class="b-badges" id="bBadges"></div>
+                <h1 class="b-name" id="bName">—</h1>
+                <p class="b-address" id="bAddress">—</p>
+                <div class="b-rating-row" id="bRatingRow"></div>
+                <p class="b-desc" id="bDesc">—</p>
+            </div>
+        </div>
+
+        <!-- Key stats strip -->
+        <div class="b-stats-strip" id="bStatsStrip"></div>
+
+        <!-- Body: two columns -->
+        <div class="b-body">
+
+            <!-- Left column -->
+            <div class="b-main">
+
+                <div class="b-section">
+                    <h3 class="section-heading">Amenities</h3>
+                    <div class="amenities-list" id="bAmenities"></div>
+                </div>
+
+                <div class="b-section">
+                    <h3 class="section-heading">
+                        Tenant Reviews
+                        <span class="review-pill" id="bReviewPill">0</span>
+                    </h3>
+                    <div id="bReviewsList"></div>
+                </div>
+
+            </div>
+
+            <!-- Right column: review form -->
+            <aside class="b-sidebar">
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">Leave an Anonymous Review</h3>
+                    <p class="sidebar-note">Your review is 100% anonymous and helps future tenants make safer decisions.</p>
+
+                    <div class="field-group">
+                        <label>Your Rating</label>
+                        <div class="star-rating" id="starRating">
+                            <span class="star" data-val="1">★</span>
+                            <span class="star" data-val="2">★</span>
+                            <span class="star" data-val="3">★</span>
+                            <span class="star" data-val="4">★</span>
+                            <span class="star" data-val="5">★</span>
+                        </div>
+                        <input type="hidden" id="ratingValue" value="0">
+                    </div>
+
+                    <div class="field-group">
+                        <label>Your Experience</label>
+                        <textarea id="reviewText" placeholder="Tell future tenants about maintenance, landlord responsiveness, noise, safety…"></textarea>
+                    </div>
+
+                    <button class="btn btn-building btn-full" onclick="submitReview()">Submit Review</button>
+                    <p class="submit-note" id="submitNote"></p>
+                </div>
+
+                <!-- Quick rent estimate for this building -->
+                <div class="sidebar-card sidebar-calc">
+                    <h3 class="sidebar-title">Quick Cost Estimate</h3>
+                    <p class="sidebar-note">How much will this building cost you over time?</p>
+                    <div class="field-group">
+                        <label>Annual Increase Rate (%)</label>
+                        <input type="number" id="quickRate" placeholder="e.g. 5" min="0" max="100" step="0.1">
+                    </div>
+                    <div class="field-group">
+                        <label>Duration (months)</label>
+                        <input type="number" id="quickMonths" placeholder="e.g. 12" min="1">
+                    </div>
+                    <button class="btn btn-rent btn-full" onclick="quickCalc()">Estimate</button>
+                    <div class="result-box hidden" id="quickResult">
+                        <span class="result-label">💰 Estimate</span>
+                        <div id="quickResultText"></div>
+                    </div>
+                </div>
+
+            </aside>
+        </div>
+    </div>
+
+    <footer class="site-footer">
+        <p>Rental Contract Helper &nbsp;·&nbsp; Phase 1 &nbsp;·&nbsp; Backend integration coming in Phase 2</p>
+    </footer>
+
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
