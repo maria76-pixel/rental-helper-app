@@ -11,7 +11,7 @@
 <body>
 
 <!-- ══════════════════════════════════════════
-     PAGE: DASHBOARD (default view)
+     PAGE: DASHBOARD
 ══════════════════════════════════════════ -->
 <div id="page-dashboard" class="page active">
 
@@ -19,14 +19,14 @@
         <div class="hero-inner">
             <span class="hero-badge">Smart Renting Toolkit</span>
             <h1>Rental Contract Helper</h1>
-            <p class="hero-subtitle">Understand legal terms, check building feedback, and estimate rent growth — all in one place.</p>
+            <p class="hero-subtitle">Understand legal terms, check building feedback, evaluate your budget, and track important dates — all in one place.</p>
         </div>
     </header>
 
     <main class="container">
         <div class="dashboard-grid">
 
-            <!-- Legal Translator -->
+            <!-- ── 1. Legal Translator ── -->
             <section class="card card-legal">
                 <div class="card-header">
                     <span class="card-icon">📘</span>
@@ -54,15 +54,64 @@
                     <span class="result-label">📖 Explanation</span>
                     <p id="legalText"></p>
                 </div>
+
+                <!-- Tenant Rights panel -->
+                <div class="rights-banner">
+                    <div class="rights-banner-top" onclick="toggleRights()">
+                        <span class="rights-icon">🛡️</span>
+                        <div>
+                            <p class="rights-title">Your Guaranteed Tenant Rights</p>
+                            <p class="rights-sub">Rights your landlord must respect — whether or not they tell you</p>
+                        </div>
+                        <span class="rights-chevron" id="rightsChevron">▼</span>
+                    </div>
+                    <div class="rights-list hidden" id="rightsList">
+                        <div class="right-item">
+                            <span class="right-num">01</span>
+                            <div>
+                                <p class="right-name">Right to Habitable Conditions</p>
+                                <p class="right-desc">Your landlord must maintain safe and livable conditions — working heat, plumbing, and no pest infestations. This cannot be waived even if the contract says otherwise.</p>
+                            </div>
+                        </div>
+                        <div class="right-item">
+                            <span class="right-num">02</span>
+                            <div>
+                                <p class="right-name">Right to Privacy</p>
+                                <p class="right-desc">Landlords must give reasonable advance notice (typically 24–48 hours) before entering your unit, except in genuine emergencies.</p>
+                            </div>
+                        </div>
+                        <div class="right-item">
+                            <span class="right-num">03</span>
+                            <div>
+                                <p class="right-name">Right Against Illegal Clauses</p>
+                                <p class="right-desc">Any clause that waives your legal rights — such as "landlord is never responsible for repairs" — is unenforceable by law, even if you signed it.</p>
+                            </div>
+                        </div>
+                        <div class="right-item">
+                            <span class="right-num">04</span>
+                            <div>
+                                <p class="right-name">Right to Security Deposit Return</p>
+                                <p class="right-desc">Your deposit must be returned within the legally required period after moving out, with an itemized list of any deductions. Landlords cannot keep it without justification.</p>
+                            </div>
+                        </div>
+                        <div class="right-item">
+                            <span class="right-num">05</span>
+                            <div>
+                                <p class="right-name">Right Against Retaliation</p>
+                                <p class="right-desc">A landlord cannot evict you, raise your rent, or reduce services because you reported a problem or exercised a legal right. This protection is guaranteed by law.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
-            <!-- Rent Calculator -->
+            <!-- ── 2. Rent Calculator + Budget Evaluator ── -->
             <section class="card card-rent">
                 <div class="card-header">
                     <span class="card-icon">📈</span>
                     <div>
                         <h2>Rent Growth Calculator</h2>
-                        <p class="card-desc">See exactly what you'll pay over the full term</p>
+                        <p class="card-desc">Project your costs and check if the rent fits your budget</p>
                     </div>
                 </div>
                 <div class="field-group">
@@ -77,15 +126,22 @@
                     <label>Duration (months)</label>
                     <input type="number" id="months" placeholder="e.g. 24" min="1">
                 </div>
+                <!-- Budget evaluator input -->
+                <div class="field-group">
+                    <label>Your Total Budget ($) <span class="label-optional">optional — for budget check</span></label>
+                    <input type="number" id="userBudget" placeholder="e.g. 30000" min="0">
+                </div>
                 <button class="btn btn-rent" onclick="calculateRent()">Calculate Projection</button>
                 <div class="result-box hidden" id="rentResult">
                     <span class="result-label">📊 Projection</span>
+                    <div class="budget-alert hidden" id="budgetAlert"></div>
                     <div class="rent-stats" id="rentStats"></div>
+                    <div class="feasible-row hidden" id="feasibleRow"></div>
                     <div class="rent-breakdown" id="rentBreakdown"></div>
                 </div>
             </section>
 
-            <!-- Building Search -->
+            <!-- ── 3. Building Search ── -->
             <section class="card card-building full-width">
                 <div class="card-header">
                     <span class="card-icon">🏢</span>
@@ -105,6 +161,48 @@
                 </div>
             </section>
 
+            <!-- ── 4. Deadline & Renewal Tracker ── -->
+            <section class="card card-tracker full-width">
+                <div class="card-header">
+                    <span class="card-icon">📅</span>
+                    <div>
+                        <h2>Deadline &amp; Renewal Tracker</h2>
+                        <p class="card-desc">Track lease renewals, payment dates, and any deadline that matters to your tenancy</p>
+                    </div>
+                </div>
+                <div class="tracker-layout">
+                    <div class="tracker-form">
+                        <div class="field-group">
+                            <label>Deadline Label</label>
+                            <input type="text" id="deadlineLabel" placeholder="e.g. Lease renewal, Rent due, Inspection…"
+                                   onkeydown="if(event.key==='Enter') addDeadline()">
+                        </div>
+                        <div class="tracker-row">
+                            <div class="field-group" style="flex:1">
+                                <label>Date</label>
+                                <input type="date" id="deadlineDate">
+                            </div>
+                            <div class="field-group" style="flex:1">
+                                <label>Type</label>
+                                <select id="deadlineType">
+                                    <option value="renewal">🔄 Renewal</option>
+                                    <option value="payment">💳 Payment</option>
+                                    <option value="inspection">🔍 Inspection</option>
+                                    <option value="notice">📨 Notice Deadline</option>
+                                    <option value="other">📌 Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-tracker" onclick="addDeadline()">+ Add Deadline</button>
+                    </div>
+                    <div class="tracker-list-wrap">
+                        <div class="tracker-list" id="trackerList">
+                            <p class="tracker-empty">No deadlines yet — add one to get started</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </div>
     </main>
 
@@ -116,7 +214,7 @@
 
 
 <!-- ══════════════════════════════════════════
-     PAGE: BUILDING DETAIL (slides in)
+     PAGE: BUILDING DETAIL
 ══════════════════════════════════════════ -->
 <div id="page-building" class="page">
 
@@ -129,7 +227,6 @@
 
     <div class="container">
 
-        <!-- Hero banner -->
         <div class="b-hero" id="bHero">
             <div class="b-hero-img" id="bHeroImg">🏢</div>
             <div class="b-hero-info">
@@ -141,20 +238,14 @@
             </div>
         </div>
 
-        <!-- Key stats strip -->
         <div class="b-stats-strip" id="bStatsStrip"></div>
 
-        <!-- Body: two columns -->
         <div class="b-body">
-
-            <!-- Left column -->
             <div class="b-main">
-
                 <div class="b-section">
                     <h3 class="section-heading">Amenities</h3>
                     <div class="amenities-list" id="bAmenities"></div>
                 </div>
-
                 <div class="b-section">
                     <h3 class="section-heading">
                         Tenant Reviews
@@ -162,15 +253,12 @@
                     </h3>
                     <div id="bReviewsList"></div>
                 </div>
-
             </div>
 
-            <!-- Right column: review form -->
             <aside class="b-sidebar">
                 <div class="sidebar-card">
                     <h3 class="sidebar-title">Leave an Anonymous Review</h3>
                     <p class="sidebar-note">Your review is 100% anonymous and helps future tenants make safer decisions.</p>
-
                     <div class="field-group">
                         <label>Your Rating</label>
                         <div class="star-rating" id="starRating">
@@ -182,20 +270,17 @@
                         </div>
                         <input type="hidden" id="ratingValue" value="0">
                     </div>
-
                     <div class="field-group">
                         <label>Your Experience</label>
                         <textarea id="reviewText" placeholder="Tell future tenants about maintenance, landlord responsiveness, noise, safety…"></textarea>
                     </div>
-
                     <button class="btn btn-building btn-full" onclick="submitReview()">Submit Review</button>
                     <p class="submit-note" id="submitNote"></p>
                 </div>
 
-                <!-- Quick rent estimate for this building -->
                 <div class="sidebar-card sidebar-calc">
                     <h3 class="sidebar-title">Quick Cost Estimate</h3>
-                    <p class="sidebar-note">How much will this building cost you over time?</p>
+                    <p class="sidebar-note">Uses this building's rent. Add a rate and duration to project your total cost.</p>
                     <div class="field-group">
                         <label>Annual Increase Rate (%)</label>
                         <input type="number" id="quickRate" placeholder="e.g. 5" min="0" max="100" step="0.1">
@@ -204,13 +289,18 @@
                         <label>Duration (months)</label>
                         <input type="number" id="quickMonths" placeholder="e.g. 12" min="1">
                     </div>
+                    <div class="field-group">
+                        <label>Your Budget ($) <span class="label-optional">optional</span></label>
+                        <input type="number" id="quickBudget" placeholder="e.g. 15000" min="0">
+                    </div>
                     <button class="btn btn-rent btn-full" onclick="quickCalc()">Estimate</button>
                     <div class="result-box hidden" id="quickResult">
                         <span class="result-label">💰 Estimate</span>
+                        <div class="budget-alert hidden" id="quickBudgetAlert"></div>
                         <div id="quickResultText"></div>
+                        <div class="feasible-row hidden" id="quickFeasibleRow"></div>
                     </div>
                 </div>
-
             </aside>
         </div>
     </div>
