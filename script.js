@@ -1,19 +1,28 @@
 // ══════════════════════════════════════════════
-//  Rental Contract Helper — script.js  (Phase 1)
-//  Backend connection comes in Phase 2
+//  script.js — Rental Contract Helper, Phase 1
+//  No backend. All data lives here until Phase 2.
 // ══════════════════════════════════════════════
 
-// ── Sample building data (replace with API in Phase 2) ──────────────────────
-const BUILDINGS_DB = [
+// ── Building data ─────────────────────────────────────────────────────────
+// To add a building: copy one block and change the values.
+// To add a photo:    set image to a filename, e.g. "photos/sunrise.jpg"
+//                    Leave it "" to use the emoji instead.
+
+const BUILDINGS = [
     {
         id: 1,
         name: "Sunrise Apartments",
         address: "142 Oak Street, Downtown",
         type: "Apartment",
-        image: "",           // put a filename here e.g. "sunrise.jpg"
-        emoji: "🏠",
-        rating: 4.2,
-        amenities: ["Parking", "Gym", "Laundry"],
+        image: "",
+        emoji: "🌅",
+        monthlyRent: 1200,
+        bedrooms: 2,
+        bathrooms: 1,
+        sqft: 850,
+        available: true,
+        amenities: ["Parking", "Gym", "Laundry", "Air Conditioning", "Storage Unit"],
+        description: "A well-maintained complex in the heart of downtown. Close to public transport and major shopping. Management is responsive and the community is quiet — a solid first choice for new renters.",
         reviews: [
             { stars: 5, date: "Mar 2025", text: "Great location, responsive landlord. Heating works perfectly all winter." },
             { stars: 4, date: "Jan 2025", text: "Nice building overall. A bit pricey but worth it for the amenities." },
@@ -25,13 +34,18 @@ const BUILDINGS_DB = [
         name: "Greenview Tower",
         address: "78 Elm Avenue, Midtown",
         type: "Condo",
-        image: "housing-satire.jpg",
+        image: "",
         emoji: "🏢",
-        rating: 3.5,
-        amenities: ["Concierge", "Rooftop"],
+        monthlyRent: 1800,
+        bedrooms: 3,
+        bathrooms: 2,
+        sqft: 1200,
+        available: true,
+        amenities: ["24/7 Concierge", "Rooftop Terrace", "Pool", "Gym", "Underground Parking"],
+        description: "Modern high-rise with panoramic city views and upscale finishes. Ideal for professionals. Note: the elevator had ongoing maintenance issues in 2024 — worth asking management about the current status.",
         reviews: [
             { stars: 2, date: "Feb 2025", text: "Landlord ignored multiple requests about the broken elevator for weeks." },
-            { stars: 4, date: "Dec 2024", text: "Great views and modern interiors. Noise from the street can be an issue." },
+            { stars: 4, date: "Dec 2024", text: "Great views and modern interiors. Street noise can be an issue at night." },
             { stars: 4, date: "Oct 2024", text: "Generally a good place. Management improved a lot in the past year." }
         ]
     },
@@ -42,49 +56,73 @@ const BUILDINGS_DB = [
         type: "Studio",
         image: "",
         emoji: "🏡",
-        rating: 4.7,
-        amenities: ["Lake View", "Pet Friendly", "Bike Storage"],
+        monthlyRent: 900,
+        bedrooms: 1,
+        bathrooms: 1,
+        sqft: 480,
+        available: false,
+        amenities: ["Lake View", "Pet Friendly", "Bike Storage", "Laundry", "Garden Access"],
+        description: "Cosy studios with stunning lake views. Perfect for students or solo professionals. The landlord is highly responsive and tenants consistently praise the peaceful atmosphere.",
         reviews: [
-            { stars: 5, date: "Apr 2025", text: "Best landlord I have ever had. Issues are fixed same day. Highly recommend." },
-            { stars: 5, date: "Feb 2025", text: "Super quiet, beautiful views, and management genuinely cares about tenants." }
+            { stars: 5, date: "Apr 2025", text: "Best landlord I have ever had. Issues fixed same day. Highly recommend." },
+            { stars: 5, date: "Feb 2025", text: "Super quiet, beautiful views, management genuinely cares about tenants." }
         ]
     },
     {
         id: 4,
-        name: "A1C Dorms",
-        address: "Saadiyat Island, Abu Dhabi",
+        name: "Heritage Flats",
+        address: "33 Maple Lane, Old Town",
         type: "Apartment",
         image: "",
-        emoji: "🏡",
-        rating: 4.9,
-        amenities: ["Lake View", "College Life", "Bike Storage"],
+        emoji: "🏛️",
+        monthlyRent: 1050,
+        bedrooms: 2,
+        bathrooms: 1,
+        sqft: 720,
+        available: true,
+        amenities: ["Historic Building", "Shared Garden", "Hardwood Floors", "High Ceilings"],
+        description: "Charming apartments inside a restored 1920s heritage building. High ceilings, original hardwood floors, and a shared garden. Some units have older plumbing — always ask before signing.",
         reviews: [
-            { stars: 5, date: "Apr 2025", text: "Best landlord I have ever had. Issues are fixed same day. Highly recommend." },
-            { stars: 5, date: "Jan 2025", text: "Super quiet, beautiful views, and management genuinely cares about tenants." }
+            { stars: 4, date: "Mar 2025", text: "Beautiful building. The character is unmatched. Old heating but it works fine." },
+            { stars: 3, date: "Jan 2025", text: "Lovely place but the pipes are noisy at night. Management was responsive when I raised it." }
         ]
-    },
+    }
 ];
 
-// Store user-submitted reviews (in memory for Phase 1)
-let userReviews = {};
+// User-submitted reviews — stored in memory for Phase 1
+// Phase 2: replace with database calls
+const userReviews = {};
 
-// Currently viewed building id
-let currentBuildingId = null;
+// Currently open building id
+let currentId = null;
 
 
-// ── LEGAL TERM TRANSLATOR ────────────────────────────────────────────────────
+// ── PAGE NAVIGATION ───────────────────────────────────────────────────────
+
+function goTo(pageId) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.getElementById(pageId).classList.add("active");
+    window.scrollTo(0, 0);
+}
+
+function goBack() {
+    goTo("page-dashboard");
+}
+
+
+// ── LEGAL TERM TRANSLATOR ─────────────────────────────────────────────────
 
 const LEGAL_TERMS = {
-    "indemnification": "This clause means you agree to protect the landlord from financial loss caused by your actions. For example, if a guest gets hurt in your apartment and sues, you — not the landlord — would have to cover the costs.",
-    "subrogation": "If your insurance company pays for a loss (like a flood), this clause allows them to sue the responsible party (such as a neighbor) on your behalf to recover that money.",
-    "force majeure": "A 'no blame' clause that excuses either party from their obligations if an extraordinary event beyond their control occurs — like a natural disaster, pandemic, or government action.",
-    "lien": "A legal claim or hold on a property. If a landlord has a lien, it means someone else (like a bank or contractor) has a financial stake in the property and could affect your tenancy.",
-    "latent defect": "A hidden flaw or problem with the property that was not visible during a normal inspection — like hidden mold, faulty wiring, or structural damage the landlord may have known about.",
-    "habitability": "Your legal right to a safe, livable home. Landlords are legally required to maintain working plumbing, heating, and structural safety. If they fail, you may have the right to withhold rent.",
-    "subletting": "Renting your apartment to another person while you are still on the lease. Many contracts forbid this or require landlord approval.",
-    "easement": "A legal right for someone else to use part of your rented property for a specific purpose — like a utility company accessing a shared driveway.",
-    "default": "When one party (usually the tenant) fails to meet a legal obligation — most commonly, not paying rent on time. Default can trigger penalty clauses.",
-    "escrow": "Money held by a neutral third party until a condition is met. In rentals, a security deposit is sometimes held in escrow by a bank."
+    "indemnification": "This clause means you agree to protect the landlord from financial loss caused by your actions. For example, if a guest is injured in your apartment and sues, you — not the landlord — would be responsible for covering those costs.",
+    "subrogation": "If your insurance company pays out for a loss (such as a flood), this clause allows them to sue the party responsible on your behalf to recover that money. It prevents you from claiming insurance and also suing the same party separately.",
+    "force majeure": "A 'no blame' clause that excuses either party from fulfilling their obligations if an extraordinary and unforeseeable event occurs — such as a natural disaster, pandemic, or government-ordered shutdown.",
+    "lien": "A legal claim or hold placed on a property. If a building carries a lien, it means a third party — such as a bank or contractor — has an outstanding financial stake in it. This could affect your tenancy if the landlord defaults on payments.",
+    "latent defect": "A hidden flaw in the property that was not visible during a standard inspection — for example, mold behind walls, faulty electrical wiring, or structural damage. If the landlord knew about it and did not disclose it, you may have legal grounds for compensation.",
+    "habitability": "Your legal right to a safe, clean, and livable home. Landlords are legally required to maintain working plumbing, heating, structural integrity, and pest control. If they fail to do so, you may be entitled to withhold rent or terminate the lease depending on local law.",
+    "subletting": "Renting your unit to another person while you remain the primary tenant on the lease. Many contracts either forbid this entirely or require the landlord's written approval before you may do so.",
+    "easement": "A legal right that allows a third party to use a specific portion of the rented property for a defined purpose — such as a utility company accessing pipes through a shared corridor.",
+    "default": "When one party fails to meet a legal obligation under the contract — most commonly the tenant not paying rent on time. Default can trigger late fees, penalty clauses, or eviction proceedings depending on the terms.",
+    "escrow": "Money held by a neutral third party — often a bank — until a specific condition is met. Security deposits are sometimes held in escrow to protect both the tenant and the landlord from disputes."
 };
 
 function quickTerm(term) {
@@ -93,105 +131,103 @@ function quickTerm(term) {
 }
 
 function explainTerm() {
-    const raw = document.getElementById("legalInput").value.trim().toLowerCase();
-    const resultBox  = document.getElementById("legalResult");
-    const resultText = document.getElementById("legalText");
+    const raw  = document.getElementById("legalInput").value.trim().toLowerCase();
+    const box  = document.getElementById("legalResult");
+    const text = document.getElementById("legalText");
 
-    if (!raw) {
-        shake(document.getElementById("legalInput"));
-        return;
-    }
+    if (!raw) { shake(document.getElementById("legalInput")); return; }
 
-    // Check our dictionary first
     const match = Object.keys(LEGAL_TERMS).find(k => raw.includes(k));
+    text.textContent = match
+        ? LEGAL_TERMS[match]
+        : "This term is not in our current dictionary. In Phase 2, this will query a live legal database. For now, try one of the quick-pick tags above.";
 
-    if (match) {
-        resultText.textContent = LEGAL_TERMS[match];
-    } else {
-        resultText.textContent = "Term not found in our current dictionary. In Phase 2, this will query a legal database. Try one of the quick-pick tags above!";
-    }
-
-    resultBox.classList.remove("hidden");
-    resultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    box.classList.remove("hidden");
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 
-// ── RENT GROWTH CALCULATOR ──────────────────────────────────────────────────
+// ── RENT GROWTH CALCULATOR ────────────────────────────────────────────────
 
 function calculateRent() {
-    const initial  = parseFloat(document.getElementById("initialRent").value);
-    const rate     = parseFloat(document.getElementById("increaseRate").value);
-    const months   = parseInt(document.getElementById("months").value);
+    const initial = parseFloat(document.getElementById("initialRent").value);
+    const rate    = parseFloat(document.getElementById("increaseRate").value);
+    const months  = parseInt(document.getElementById("months").value);
 
     if (!initial || initial <= 0 || isNaN(rate) || !months || months < 1) {
-        alert("Please fill in all three fields with valid numbers.");
-        return;
+        alert("Please fill in all three fields with valid numbers."); return;
+    }
+    if (initial > 1000000 || rate > 100 || months > 600) {
+        alert("Please use realistic values: rent ≤ $1,000,000  ·  rate ≤ 100%  ·  months ≤ 600."); return;
     }
 
-    if (initial > 1_000_000 || rate > 100 || months > 600) {
-        alert("Please enter realistic values (rent ≤ $1,000,000, rate ≤ 100%, months ≤ 600).");
-        return;
+    renderRentResult("rentStats", "rentBreakdown", "rentResult", initial, rate, months);
+}
+
+function quickCalc() {
+    const building = BUILDINGS.find(b => b.id === currentId);
+    if (!building) return;
+
+    const rate   = parseFloat(document.getElementById("quickRate").value);
+    const months = parseInt(document.getElementById("quickMonths").value);
+
+    if (isNaN(rate) || !months || months < 1) {
+        alert("Please fill in both fields."); return;
     }
 
-    let total       = 0;
-    let currentRent = initial;
-    let firstRent   = initial;
-    let lastRent    = initial;
-    let rows        = [];
+    renderQuickResult(building.monthlyRent, rate, months);
+}
+
+function renderRentResult(statsId, breakdownId, boxId, initial, rate, months) {
+    let total = 0, rent = initial, rows = [];
 
     for (let m = 1; m <= months; m++) {
-        // Apply annual increase at the start of each new year (after month 12, 24…)
-        if (m > 1 && (m - 1) % 12 === 0) {
-            currentRent = currentRent * (1 + rate / 100);
-        }
-        total += currentRent;
-        lastRent = currentRent;
-
-        // Collect yearly snapshots for the table
+        if (m > 1 && (m - 1) % 12 === 0) rent *= (1 + rate / 100);
+        total += rent;
         if (m % 12 === 0 || m === months) {
-            const year = Math.ceil(m / 12);
-            rows.push({ label: m % 12 === 0 ? `Year ${year}` : `Month ${m} (partial)`, rent: currentRent, cumTotal: total });
+            rows.push({ label: m % 12 === 0 ? "Year " + (m / 12) : "Month " + m, rent, total });
         }
     }
 
-    const increase = lastRent - firstRent;
-    const increasePercent = ((increase / firstRent) * 100).toFixed(1);
+    const pct = initial > 0 ? (((rent - initial) / initial) * 100).toFixed(1) : "0.0";
 
-    // Stats pills
-    document.getElementById("rentStats").innerHTML = `
-        <div class="stat-pill">
-            <span class="stat-val">$${fmt(total)}</span>
-            <span class="stat-key">Total Cost</span>
-        </div>
-        <div class="stat-pill">
-            <span class="stat-val">$${fmt(lastRent)}</span>
-            <span class="stat-key">Final Monthly Rent</span>
-        </div>
-        <div class="stat-pill">
-            <span class="stat-val">+${increasePercent}%</span>
-            <span class="stat-key">Total Increase</span>
-        </div>
+    document.getElementById(statsId).innerHTML = `
+        <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
+        <div class="stat-pill"><span class="stat-val">$${fmt(rent)}</span><span class="stat-key">Final Monthly</span></div>
+        <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Total Increase</span></div>
     `;
 
-    // Yearly breakdown table
-    let tableHTML = `
-        <table class="breakdown-table">
-            <thead><tr><th>Period</th><th>Monthly Rent</th><th>Cumulative Total</th></tr></thead>
-            <tbody>
-    `;
+    let tbl = `<table class="breakdown-table">
+        <thead><tr><th>Period</th><th>Monthly Rent</th><th>Cumulative Total</th></tr></thead>
+        <tbody>`;
     rows.forEach(r => {
-        tableHTML += `<tr>
-            <td>${r.label}</td>
-            <td>$${fmt(r.rent)}</td>
-            <td>$${fmt(r.cumTotal)}</td>
-        </tr>`;
+        tbl += `<tr><td>${r.label}</td><td>$${fmt(r.rent)}</td><td>$${fmt(r.total)}</td></tr>`;
     });
-    tableHTML += "</tbody></table>";
-    document.getElementById("rentBreakdown").innerHTML = tableHTML;
+    tbl += "</tbody></table>";
 
-    const resultBox = document.getElementById("rentResult");
-    resultBox.classList.remove("hidden");
-    resultBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document.getElementById(breakdownId).innerHTML = tbl;
+    document.getElementById(boxId).classList.remove("hidden");
+    document.getElementById(boxId).scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function renderQuickResult(initial, rate, months) {
+    let total = 0, rent = initial;
+
+    for (let m = 1; m <= months; m++) {
+        if (m > 1 && (m - 1) % 12 === 0) rent *= (1 + rate / 100);
+        total += rent;
+    }
+
+    const pct = initial > 0 ? (((rent - initial) / initial) * 100).toFixed(1) : "0.0";
+
+    document.getElementById("quickResultText").innerHTML = `
+        <div class="rent-stats" style="margin-bottom:0">
+            <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
+            <div class="stat-pill"><span class="stat-val">$${fmt(rent)}</span><span class="stat-key">Final Monthly</span></div>
+            <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Increase</span></div>
+        </div>
+    `;
+    document.getElementById("quickResult").classList.remove("hidden");
 }
 
 function fmt(n) {
@@ -199,139 +235,143 @@ function fmt(n) {
 }
 
 
-// ── BUILDING SEARCH ─────────────────────────────────────────────────────────
+// ── BUILDING SEARCH ───────────────────────────────────────────────────────
 
 function searchBuilding() {
-    const query = document.getElementById("buildingInput").value.trim().toLowerCase();
-    const grid  = document.getElementById("buildingsGrid");
+    const q    = document.getElementById("buildingInput").value.trim().toLowerCase();
+    const grid = document.getElementById("buildingsGrid");
 
-    // Hide detail panel if open
-    closeDetail();
+    if (!q) { shake(document.getElementById("buildingInput")); return; }
 
-    if (!query) {
-        shake(document.getElementById("buildingInput"));
-        return;
-    }
-
-    const results = BUILDINGS_DB.filter(b =>
-        b.name.toLowerCase().includes(query) ||
-        b.address.toLowerCase().includes(query) ||
-        b.type.toLowerCase().includes(query)
+    const results = BUILDINGS.filter(b =>
+        b.name.toLowerCase().includes(q)    ||
+        b.address.toLowerCase().includes(q) ||
+        b.type.toLowerCase().includes(q)
     );
 
-    if (results.length === 0) {
-        grid.innerHTML = `<p class="placeholder-text">😕 No buildings found for "<strong>${escHtml(query)}</strong>". Try "Sunrise", "Tower", or "Studio".</p>`;
+    if (!results.length) {
+        grid.innerHTML = `<p class="placeholder-text">😕 No results for "<strong>${esc(q)}</strong>". Try "Sunrise", "Tower", "Studio", or "Heritage".</p>`;
         return;
     }
 
-    grid.innerHTML = results.map(b => buildingCardHTML(b)).join("");
-}
+    grid.innerHTML = results.map(b => {
+        const all = allReviews(b.id);
+        const avg = avgRating(all);
+        const img = b.image ? `<img src="${esc(b.image)}" alt="">` : b.emoji;
+        const avail = b.available
+            ? `<span class="badge badge-yes">Available</span>`
+            : `<span class="badge badge-no">Unavailable</span>`;
 
-function buildingCardHTML(b) {
-    const allReviews = [...b.reviews, ...(userReviews[b.id] || [])];
-    const avgRating  = allReviews.length
-        ? (allReviews.reduce((s, r) => s + r.stars, 0) / allReviews.length).toFixed(1)
-        : b.rating.toFixed(1);
-
-    const imgContent = b.image
-        ? `<img src="${b.image}" alt="${escHtml(b.name)}">`
-        : b.emoji;
-
-    return `
-    <div class="building-card" onclick="openDetail(${b.id})">
-        <div class="building-card-img">${imgContent}</div>
-        <div class="building-card-body">
-            <p class="building-card-name">${escHtml(b.name)}</p>
-            <p class="building-card-address">${escHtml(b.address)}</p>
-            <div class="building-card-footer">
-                <span>
-                    <span class="stars">${starHTML(parseFloat(avgRating))}</span>
-                    <span class="review-count">&nbsp;${avgRating} (${allReviews.length})</span>
-                </span>
-                <span class="badge-type">${escHtml(b.type)}</span>
+        return `
+        <div class="building-card" onclick="openBuilding(${b.id})">
+            <div class="building-card-img">${img}</div>
+            <div class="building-card-body">
+                <p class="building-card-name">${esc(b.name)}</p>
+                <p class="building-card-address">📍 ${esc(b.address)}</p>
+                <div class="building-card-footer">
+                    <span>
+                        ${starHTML(avg)}
+                        <span class="review-count-sm"> ${avg > 0 ? avg.toFixed(1) : "—"} (${all.length})</span>
+                    </span>
+                    ${avail}
+                </div>
             </div>
-        </div>
-    </div>`;
+        </div>`;
+    }).join("");
 }
 
-function openDetail(id) {
-    const b = BUILDINGS_DB.find(x => x.id === id);
+
+// ── BUILDING DETAIL PAGE ──────────────────────────────────────────────────
+
+function openBuilding(id) {
+    const b = BUILDINGS.find(x => x.id === id);
     if (!b) return;
+    currentId = id;
 
-    currentBuildingId = id;
-    const allReviews  = [...b.reviews, ...(userReviews[id] || [])];
-    const avgRating   = allReviews.length
-        ? (allReviews.reduce((s, r) => s + r.stars, 0) / allReviews.length).toFixed(1)
-        : b.rating.toFixed(1);
+    const all = allReviews(id);
+    const avg = avgRating(all);
 
-    const imgContent = b.image
-        ? `<img src="${b.image}" alt="${escHtml(b.name)}">`
+    // Image
+    document.getElementById("bHeroImg").innerHTML = b.image
+        ? `<img src="${esc(b.image)}" alt="${esc(b.name)}">`
         : b.emoji;
 
-    const reviewsHTML = allReviews.length
-        ? allReviews.map(r => `
-            <div class="review-item">
-                <div class="review-item-header">
-                    <span class="review-item-stars">${starHTML(r.stars)}</span>
-                    <span class="review-item-date">${r.date || "Anonymous"}</span>
-                </div>
-                <p class="review-item-text">${escHtml(r.text)}</p>
-            </div>`).join("")
-        : `<p class="no-reviews">No reviews yet — be the first!</p>`;
+    // Badges
+    const availBadge = b.available
+        ? `<span class="badge badge-yes">✓ Available</span>`
+        : `<span class="badge badge-no">✗ Unavailable</span>`;
+    document.getElementById("bBadges").innerHTML =
+        `<span class="badge badge-type">${esc(b.type)}</span>${availBadge}`;
 
-    const amenitiesHTML = b.amenities.map(a => `<span class="detail-pill">${escHtml(a)}</span>`).join("");
+    // Name, address, description
+    document.getElementById("bName").textContent    = b.name;
+    document.getElementById("bAddress").textContent = "📍 " + b.address;
+    document.getElementById("bDesc").textContent    = b.description;
 
-    document.getElementById("detailInner").innerHTML = `
-        <div class="detail-hero">
-            <div class="detail-img">${imgContent}</div>
-            <div class="detail-meta">
-                <h3>${escHtml(b.name)}</h3>
-                <p class="detail-address">📍 ${escHtml(b.address)}</p>
-                <div class="detail-pills">${amenitiesHTML}</div>
-                <div class="detail-rating-big">
-                    <span class="star-big">★</span> ${avgRating}
-                    <span style="font-size:0.85rem;font-weight:400;color:var(--text-muted)">&nbsp;from ${allReviews.length} review${allReviews.length !== 1 ? "s" : ""}</span>
-                </div>
-            </div>
+    // Rating row
+    document.getElementById("bRatingRow").innerHTML = avg > 0
+        ? `<span class="b-rating-num">${avg.toFixed(1)}</span>
+           <span class="b-rating-stars" style="color:#f59e0b">${starHTML(avg)}</span>
+           <span class="b-rating-count">${all.length} review${all.length !== 1 ? "s" : ""}</span>`
+        : `<span class="b-rating-count">No reviews yet</span>`;
+
+    // Stats strip
+    document.getElementById("bStatsStrip").innerHTML = `
+        <div class="stat-chip">
+            <span class="chip-val">$${b.monthlyRent.toLocaleString()}<small style="font-size:0.65rem;font-weight:400">/mo</small></span>
+            <span class="chip-key">Monthly Rent</span>
         </div>
-
-        <div class="reviews-section">
-            <h4>Tenant Reviews</h4>
-            <div id="reviewsList">${reviewsHTML}</div>
+        <div class="stat-chip">
+            <span class="chip-val">${b.bedrooms} bed · ${b.bathrooms} bath</span>
+            <span class="chip-key">Rooms</span>
         </div>
-
-        <div class="review-form-section">
-            <h4>Leave an Anonymous Review</h4>
-            <div class="star-rating" id="starRating">
-                <span class="star" data-val="1">★</span>
-                <span class="star" data-val="2">★</span>
-                <span class="star" data-val="3">★</span>
-                <span class="star" data-val="4">★</span>
-                <span class="star" data-val="5">★</span>
-            </div>
-            <input type="hidden" id="ratingValue" value="0">
-            <div class="field-group" style="margin-top:10px">
-                <label>Your Review</label>
-                <textarea id="reviewText" placeholder="Share your honest experience about this building…"></textarea>
-            </div>
-            <button class="btn btn-building" onclick="submitReview()">Submit Review</button>
-            <p class="submit-note" id="submitNote"></p>
+        <div class="stat-chip">
+            <span class="chip-val">${b.sqft.toLocaleString()} sq ft</span>
+            <span class="chip-key">Size</span>
+        </div>
+        <div class="stat-chip">
+            <span class="chip-val">${esc(b.type)}</span>
+            <span class="chip-key">Property Type</span>
         </div>
     `;
 
-    // Attach star rating events
-    initStarRating("starRating", "ratingValue");
+    // Amenities
+    document.getElementById("bAmenities").innerHTML =
+        b.amenities.map(a => `<span class="amenity-tag">${esc(a)}</span>`).join("");
 
-    document.getElementById("buildingsGrid").classList.add("hidden");
-    const panel = document.getElementById("buildingDetail");
-    panel.classList.remove("hidden");
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Reviews
+    renderReviews(all);
+
+    // Reset review form
+    document.getElementById("reviewText").value    = "";
+    document.getElementById("ratingValue").value   = "0";
+    document.getElementById("submitNote").textContent = "";
+    document.querySelectorAll("#starRating .star").forEach(s => s.classList.remove("active"));
+
+    // Reset quick calculator
+    document.getElementById("quickRate").value   = "";
+    document.getElementById("quickMonths").value = "";
+    document.getElementById("quickResult").classList.add("hidden");
+
+    // Wire up star rating
+    initStars();
+
+    // Navigate to detail page
+    goTo("page-building");
 }
 
-function closeDetail() {
-    document.getElementById("buildingDetail").classList.add("hidden");
-    document.getElementById("buildingsGrid").classList.remove("hidden");
-    currentBuildingId = null;
+function renderReviews(all) {
+    document.getElementById("bReviewPill").textContent = all.length;
+    document.getElementById("bReviewsList").innerHTML = all.length
+        ? all.map(r => `
+            <div class="review-item">
+                <div class="review-item-header">
+                    <span style="color:#f59e0b;font-size:0.92rem">${starHTML(r.stars)}</span>
+                    <span class="review-date">${r.date || "Anonymous"}</span>
+                </div>
+                <p class="review-text">${esc(r.text)}</p>
+            </div>`).join("")
+        : `<p class="no-reviews">No reviews yet — be the first to share your experience!</p>`;
 }
 
 function submitReview() {
@@ -339,103 +379,87 @@ function submitReview() {
     const text   = document.getElementById("reviewText").value.trim();
     const note   = document.getElementById("submitNote");
 
-    if (rating === 0) { note.style.color = "#dc2626"; note.textContent = "Please select a star rating."; return; }
-    if (!text)        { note.style.color = "#dc2626"; note.textContent = "Please write a short review."; return; }
+    if (!rating) { note.style.color = "#dc2626"; note.textContent = "Please select a star rating first."; return; }
+    if (!text)   { note.style.color = "#dc2626"; note.textContent = "Please write a short review."; return; }
 
     const now = new Date().toLocaleString("en-US", { month: "short", year: "numeric" });
+    if (!userReviews[currentId]) userReviews[currentId] = [];
+    userReviews[currentId].push({ stars: rating, date: now, text });
 
-    if (!userReviews[currentBuildingId]) userReviews[currentBuildingId] = [];
-    userReviews[currentBuildingId].push({ stars: rating, date: now, text });
+    const all = allReviews(currentId);
+    const avg = avgRating(all);
 
-    // Refresh reviews list inline
-    const allReviews = [
-        ...BUILDINGS_DB.find(b => b.id === currentBuildingId).reviews,
-        ...userReviews[currentBuildingId]
-    ];
+    // Update rating row
+    document.getElementById("bRatingRow").innerHTML = `
+        <span class="b-rating-num">${avg.toFixed(1)}</span>
+        <span class="b-rating-stars" style="color:#f59e0b">${starHTML(avg)}</span>
+        <span class="b-rating-count">${all.length} review${all.length !== 1 ? "s" : ""}</span>`;
 
-    document.getElementById("reviewsList").innerHTML = allReviews.map(r => `
-        <div class="review-item">
-            <div class="review-item-header">
-                <span class="review-item-stars">${starHTML(r.stars)}</span>
-                <span class="review-item-date">${r.date || "Anonymous"}</span>
-            </div>
-            <p class="review-item-text">${escHtml(r.text)}</p>
-        </div>`).join("");
+    renderReviews(all);
 
     // Reset form
-    document.getElementById("reviewText").value = "";
+    document.getElementById("reviewText").value  = "";
     document.getElementById("ratingValue").value = "0";
     document.querySelectorAll("#starRating .star").forEach(s => s.classList.remove("active"));
-    note.style.color = "#0f766e";
-    note.textContent = "✓ Review submitted — thank you!";
-
-    // Refresh card in grid too
-    searchBuilding();
+    note.style.color   = "#0f766e";
+    note.textContent   = "✓ Review submitted — thank you!";
 }
 
 
-// ── STAR RATING WIDGET ───────────────────────────────────────────────────────
+// ── STAR RATING WIDGET ────────────────────────────────────────────────────
 
-function initStarRating(containerId, inputId) {
-    const container = document.getElementById(containerId);
-    const input     = document.getElementById(inputId);
-    if (!container) return;
-
-    const stars = container.querySelectorAll(".star");
+function initStars() {
+    const stars = document.querySelectorAll("#starRating .star");
+    const input = document.getElementById("ratingValue");
 
     stars.forEach(star => {
         star.addEventListener("mouseover", () => {
-            const val = parseInt(star.dataset.val);
-            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= val));
+            const v = parseInt(star.dataset.val);
+            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= v));
         });
-
         star.addEventListener("mouseout", () => {
-            const selected = parseInt(input.value);
-            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= selected));
+            const sel = parseInt(input.value);
+            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= sel));
         });
-
         star.addEventListener("click", () => {
             input.value = star.dataset.val;
-            const selected = parseInt(input.value);
-            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= selected));
+            const sel = parseInt(input.value);
+            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= sel));
         });
     });
 }
 
 
-// ── HELPERS ──────────────────────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────────────
 
-function starHTML(rating) {
-    let html = "";
-    for (let i = 1; i <= 5; i++) {
-        html += `<span class="${i <= Math.round(rating) ? "stars" : "stars-empty"}">★</span>`;
-    }
-    return html;
+function allReviews(id) {
+    const b = BUILDINGS.find(x => x.id === id);
+    return [...(b ? b.reviews : []), ...(userReviews[id] || [])];
 }
 
-function escHtml(str) {
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
+function avgRating(reviews) {
+    if (!reviews.length) return 0;
+    return reviews.reduce((s, r) => s + r.stars, 0) / reviews.length;
+}
+
+function starHTML(rating) {
+    let h = "";
+    for (let i = 1; i <= 5; i++)
+        h += `<span style="color:${i <= Math.round(rating) ? "#f59e0b" : "#d1d5db"}">★</span>`;
+    return h;
+}
+
+function esc(s) {
+    return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function shake(el) {
     el.style.animation = "none";
-    el.offsetHeight; // reflow
-    el.style.animation = "shake 0.3s ease";
+    el.offsetHeight;
+    el.style.animation = "shake 0.32s ease";
     el.addEventListener("animationend", () => el.style.animation = "", { once: true });
 }
-
-// Add shake animation to stylesheet dynamically
-const shakeStyle = document.createElement("style");
-shakeStyle.textContent = `
-@keyframes shake {
-    0%,100% { transform: translateX(0); }
-    20%,60%  { transform: translateX(-5px); }
-    40%,80%  { transform: translateX(5px); }
-}`;
-document.head.appendChild(shakeStyle);
 
 console.log("Rental Contract Helper — Phase 1 loaded ✓");
