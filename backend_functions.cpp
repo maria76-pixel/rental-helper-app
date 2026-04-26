@@ -22,20 +22,17 @@ using json = nlohmann::json;
 const double DEFAULT_INFLATION_RATE = 5.0;
 
 
-// ══════════════════════════════════════════════
-//  PRESERVED FROM backend_functions.hpp
-//  (original logic kept exactly, no changes)
-// ══════════════════════════════════════════════
+
 
 // Calculates the projected rent for the next billing period
-// Mirrors: new_rent() in backend_functions.hpp
+
 double new_rent(double current_rent, double rent_inflation_rate) {
     double rent_increase = rent_inflation_rate * 0.01 * current_rent;
     return rent_increase + current_rent;
 }
 
 // Calculates total rent over a time period
-// Mirrors: get_total_rent() in backend_functions.hpp
+
 double get_total_rent(double base_rent, int time_period, int charges_per_year, double rent_inflation_rate) {
     int billing_blocks = time_period * charges_per_year;
     int year(0), ctr(0);
@@ -51,7 +48,7 @@ double get_total_rent(double base_rent, int time_period, int charges_per_year, d
 }
 
 // Returns true if total projected rent exceeds the user's budget
-// Mirrors: rent_flag() in backend_functions.hpp
+
 bool rent_flag(double current_rent, double inflation_rate, int time_period, double charges_per_year, double budget) {
     if (get_total_rent(current_rent, time_period, charges_per_year, inflation_rate) > budget) {
         return true;
@@ -60,7 +57,7 @@ bool rent_flag(double current_rent, double inflation_rate, int time_period, doub
 }
 
 // Returns the maximum number of years the user can rent within their budget
-// Mirrors: valid_years() in backend_functions.hpp
+
 int valid_years(double current_rent, double inflation_rate, double charges_per_year, double budget) {
     int years(0);
     double total;
@@ -72,7 +69,7 @@ int valid_years(double current_rent, double inflation_rate, double charges_per_y
 }
 
 // Validates numeric input within a range
-// Mirrors: get_valid_number_inputs() in backend_functions.hpp
+
 void get_valid_number_inputs(double lower_bound, double upper_bound, double& destination) {
     do {
         cout << "Input value: " << endl;
@@ -83,12 +80,10 @@ void get_valid_number_inputs(double lower_bound, double upper_bound, double& des
 
 // ══════════════════════════════════════════════
 //  NEW FUNCTIONS — migrated from script.js
-//  These are the JS calculation functions
-//  translated into C++
-// ══════════════════════════════════════════════
+
 
 // Struct to hold a single row of the rent projection table
-// Mirrors the rows[] array built inside projectRent() in script.js
+
 struct RentRow {
     string label;       // e.g. "Year 1", "Month 14 (partial)"
     double rent;        // monthly rent at that point
@@ -96,7 +91,6 @@ struct RentRow {
 };
 
 // Struct to hold the full result of a projection
-// Mirrors the return value { total, finalRent, rows } in script.js
 struct ProjectionResult {
     double total;
     double finalRent;
@@ -104,8 +98,6 @@ struct ProjectionResult {
 };
 
 // Core projection engine — month-by-month rent accumulation
-// Direct C++ translation of projectRent() in script.js
-// Uses monthly billing (charges_per_year = 12) to match the JS version
 ProjectionResult projectRent(double initial, double rate, int months) {
     ProjectionResult result;
     result.total     = 0;
@@ -139,8 +131,7 @@ ProjectionResult projectRent(double initial, double rate, int months) {
 }
 
 // Returns the maximum number of MONTHS affordable within a budget
-// Direct C++ translation of feasibleDuration() in script.js
-// Note: valid_years() above works in years — this works in months (finer grain)
+
 int feasibleDuration(double initial, double rate, double budget) {
     double total = 0;
     double rent  = initial;
@@ -161,7 +152,6 @@ int feasibleDuration(double initial, double rate, double budget) {
 }
 
 // Formats a double as a currency string: e.g. 1234.5 -> "$1,234.50"
-// Mirrors fmt() in script.js
 string formatCurrency(double amount) {
     ostringstream oss;
     oss << fixed << setprecision(2) << amount;
@@ -178,7 +168,6 @@ string formatCurrency(double amount) {
 }
 
 // Prints a full rent projection to the console
-// This is what calculateRent() does visually in script.js
 void calculateRent(double initial, double rate, int months, double budget) {
     if (initial <= 0 || rate < 0 || months < 1) {
         cout << "Error: invalid inputs." << endl;
