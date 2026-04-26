@@ -1,12 +1,19 @@
 // ══════════════════════════════════════════════
-//  script.js — Rental Contract Helper, Phase 1
-//  No backend. All data lives here until Phase 2.
+//  script.js — Rental Contract Helper
+//  Frontend UI only — Phase 1 & Phase 2 ready
+//
+//  Phase 1: calculations run locally in JS
+//           (mirrors the C++ logic exactly)
+//  Phase 2: all calls go to the C++ backend
+//           via fetch() — just flip USE_BACKEND
 // ══════════════════════════════════════════════
 
-// ── Building data ─────────────────────────────────────────────────────────
-// To add a building: copy one block and change the values.
-// To add a photo:    set image to a filename, e.g. "photos/sunrise.jpg"
-//                    Leave "" to use the emoji instead.
+// ── Toggle this to true when C++ backend is running ──
+const USE_BACKEND = false;
+const API_BASE    = "http://localhost:8080/api";
+
+// ── In-memory data for Phase 1 ───────────────────────────────────────────
+// Phase 2: this data will come from storage.cpp via the API instead
 
 const BUILDINGS = [
     {
@@ -89,11 +96,13 @@ const BUILDINGS = [
     }
 ];
 
-// User-submitted reviews — stored in memory for Phase 1
+// User-submitted reviews in memory (Phase 1)
+// Phase 2: addReviewToBuilding() in storage.cpp handles this
 const userReviews = {};
 
-// Deadlines list — stored in memory for Phase 1
-let deadlines = [];
+// Deadlines — in memory (Phase 1)
+// Phase 2: will be stored in a deadlines.json file
+let deadlines        = [];
 let deadlineIdCounter = 0;
 
 // Currently open building id
@@ -114,6 +123,8 @@ function goBack() {
 
 
 // ── LEGAL TERM TRANSLATOR ─────────────────────────────────────────────────
+// Phase 2: this dictionary will be served from a legal_terms.json file
+// loaded by the C++ backend and returned via GET /api/legal?term=...
 
 const LEGAL_TERMS = {
     "indemnification": "This clause means you agree to protect the landlord from financial loss caused by your actions. For example, if a guest is injured in your apartment and sues, you — not the landlord — would be responsible for covering those costs.",
@@ -133,17 +144,29 @@ function quickTerm(term) {
     explainTerm();
 }
 
-function explainTerm() {
+async function explainTerm() {
     const raw  = document.getElementById("legalInput").value.trim().toLowerCase();
     const box  = document.getElementById("legalResult");
     const text = document.getElementById("legalText");
 
     if (!raw) { shake(document.getElementById("legalInput")); return; }
 
-    const match = Object.keys(LEGAL_TERMS).find(k => raw.includes(k));
-    text.textContent = match
-        ? LEGAL_TERMS[match]
-        : "This term is not in our current dictionary. In Phase 2, this will query a live legal database. For now, try one of the quick-pick tags above.";
+    if (USE_BACKEND) {
+        // Phase 2: GET /api/legal?term=indemnification
+        try {
+            const res  = await fetch(`${API_BASE}/legal?term=${encodeURIComponent(raw)}`);
+            const data = await res.json();
+            text.textContent = data.explanation || "Term not found.";
+        } catch (e) {
+            text.textContent = "Could not reach the backend. Please try again.";
+        }
+    } else {
+        // Phase 1: look up in local dictionary
+        const match = Object.keys(LEGAL_TERMS).find(k => raw.includes(k));
+        text.textContent = match
+            ? LEGAL_TERMS[match]
+            : "This term is not in our current dictionary. In Phase 2, this will query a live legal database. Try one of the quick-pick tags above.";
+    }
 
     box.classList.remove("hidden");
     box.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -161,9 +184,11 @@ function toggleRights() {
 }
 
 
-// ── RENT GROWTH CALCULATOR + BUDGET EVALUATOR ─────────────────────────────
+// ── RENT GROWTH CALCULATOR ────────────────────────────────────────────────
+// Phase 2: POST /api/calculate with { initial, rate, months, budget }
+// backend_functions.cpp handles calculateRentJSON() and returns the result
 
-function calculateRent() {
+async function calculateRent() {
     const initial = parseFloat(document.getElementById("initialRent").value);
     const rate    = parseFloat(document.getElementById("increaseRate").value);
     const months  = parseInt(document.getElementById("months").value);
@@ -176,58 +201,33 @@ function calculateRent() {
         alert("Please use realistic values: rent ≤ $1,000,000  ·  rate ≤ 100%  ·  months ≤ 600."); return;
     }
 
-    const { total, finalRent, rows } = projectRent(initial, rate, months);
-    const pct = (((finalRent - initial) / initial) * 100).toFixed(1);
+    let data;
 
-    // Budget alert
-    const alertEl = document.getElementById("budgetAlert");
-    if (budget && budget > 0) {
-        if (total > budget) {
-            const over = total - budget;
-            alertEl.className = "budget-alert over";
-            alertEl.innerHTML = `<span class="alert-icon">⚠️</span>
-                <span>Your projected total of <strong>$${fmt(total)}</strong> exceeds your budget by <strong>$${fmt(over)}</strong>. See below for how long you can afford this rent.</span>`;
-            alertEl.classList.remove("hidden");
-        } else {
-            const under = budget - total;
-            alertEl.className = "budget-alert ok";
-            alertEl.innerHTML = `<span class="alert-icon">✅</span>
-                <span>This rent fits your budget. You will have <strong>$${fmt(under)}</strong> to spare over the full term.</span>`;
-            alertEl.classList.remove("hidden");
+    if (USE_BACKEND) {
+        // Phase 2: send inputs to C++ backend
+        // backend_functions.cpp -> calculateRentJSON() returns this shape:
+        // { total, finalRent, increase, overBudget, overBy?,
+        //   feasibleMonths?, spareAmount?, rows[] }
+        try {
+            const res = await fetch(`${API_BASE}/calculate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ initial, rate, months, budget })
+            });
+            data = await res.json();
+        } catch (e) {
+            alert("Could not reach the backend. Please try again."); return;
         }
     } else {
-        alertEl.classList.add("hidden");
+        // Phase 1: run calculation locally
+        // This mirrors calculateRentJSON() in backend_functions.cpp exactly
+        data = localProjectRent(initial, rate, months, budget);
     }
 
-    // Stats pills
-    document.getElementById("rentStats").innerHTML = `
-        <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
-        <div class="stat-pill"><span class="stat-val">$${fmt(finalRent)}</span><span class="stat-key">Final Monthly</span></div>
-        <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Total Increase</span></div>
-    `;
-
-    // Feasible duration
-    const feasibleEl = document.getElementById("feasibleRow");
-    if (budget && budget > 0 && total > budget) {
-        const maxMonths = feasibleDuration(initial, rate, budget);
-        feasibleEl.innerHTML = `⏱️ With your budget of <strong>$${fmt(budget)}</strong>, you can afford this rent for a maximum of <strong>${maxMonths} month${maxMonths !== 1 ? "s" : ""}</strong> (${(maxMonths / 12).toFixed(1)} years).`;
-        feasibleEl.classList.remove("hidden");
-    } else {
-        feasibleEl.classList.add("hidden");
-    }
-
-    // Breakdown table
-    document.getElementById("rentBreakdown").innerHTML = buildTable(rows);
-
-    const box = document.getElementById("rentResult");
-    box.classList.remove("hidden");
-    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    renderRentResult(data, "budgetAlert", "rentStats", "feasibleRow", "rentBreakdown", "rentResult");
 }
 
-
-// ── QUICK CALC (building detail page) ────────────────────────────────────
-
-function quickCalc() {
+async function quickCalc() {
     const building = BUILDINGS.find(b => b.id === currentId);
     if (!building) return;
 
@@ -239,89 +239,152 @@ function quickCalc() {
         alert("Please fill in the rate and duration fields."); return;
     }
 
-    const initial = building.monthlyRent;
-    const { total, finalRent, rows } = projectRent(initial, rate, months);
-    const pct = (((finalRent - initial) / initial) * 100).toFixed(1);
+    let data;
 
-    // Budget alert
-    const alertEl = document.getElementById("quickBudgetAlert");
-    if (budget && budget > 0) {
-        if (total > budget) {
-            const over = total - budget;
+    if (USE_BACKEND) {
+        // Phase 2: POST /api/calculate with building's rent pre-filled
+        try {
+            const res = await fetch(`${API_BASE}/calculate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ initial: building.monthlyRent, rate, months, budget })
+            });
+            data = await res.json();
+        } catch (e) {
+            alert("Could not reach the backend. Please try again."); return;
+        }
+    } else {
+        // Phase 1: run locally
+        data = localProjectRent(building.monthlyRent, rate, months, budget);
+    }
+
+    // Render into the quick result sidebar
+    const alertEl    = document.getElementById("quickBudgetAlert");
+    const feasibleEl = document.getElementById("quickFeasibleRow");
+
+    if (data.budgetProvided) {
+        if (data.overBudget) {
             alertEl.className = "budget-alert over";
             alertEl.innerHTML = `<span class="alert-icon">⚠️</span>
-                <span>Total <strong>$${fmt(total)}</strong> exceeds your budget by <strong>$${fmt(over)}</strong>.</span>`;
+                <span>Total <strong>$${fmt(data.total)}</strong> exceeds your budget by <strong>$${fmt(data.overBy)}</strong>.</span>`;
             alertEl.classList.remove("hidden");
+            feasibleEl.innerHTML = `⏱️ Max affordable: <strong>${data.feasibleMonths} month${data.feasibleMonths !== 1 ? "s" : ""}</strong> (${(data.feasibleMonths / 12).toFixed(1)} yrs)`;
+            feasibleEl.classList.remove("hidden");
         } else {
             alertEl.className = "budget-alert ok";
             alertEl.innerHTML = `<span class="alert-icon">✅</span>
-                <span>This rent fits your budget — <strong>$${fmt(budget - total)}</strong> to spare.</span>`;
+                <span>Fits budget — <strong>$${fmt(data.spareAmount)}</strong> to spare.</span>`;
             alertEl.classList.remove("hidden");
+            feasibleEl.classList.add("hidden");
         }
     } else {
         alertEl.classList.add("hidden");
+        feasibleEl.classList.add("hidden");
     }
 
     document.getElementById("quickResultText").innerHTML = `
         <div class="rent-stats" style="margin-bottom:0">
-            <div class="stat-pill"><span class="stat-val">$${fmt(total)}</span><span class="stat-key">Total Cost</span></div>
-            <div class="stat-pill"><span class="stat-val">$${fmt(finalRent)}</span><span class="stat-key">Final Monthly</span></div>
-            <div class="stat-pill"><span class="stat-val">+${pct}%</span><span class="stat-key">Increase</span></div>
-        </div>
-    `;
-
-    // Feasible duration
-    const feasibleEl = document.getElementById("quickFeasibleRow");
-    if (budget && budget > 0 && total > budget) {
-        const maxMonths = feasibleDuration(initial, rate, budget);
-        feasibleEl.innerHTML = `⏱️ Max affordable duration: <strong>${maxMonths} month${maxMonths !== 1 ? "s" : ""}</strong> (${(maxMonths / 12).toFixed(1)} yrs)`;
-        feasibleEl.classList.remove("hidden");
-    } else {
-        feasibleEl.classList.add("hidden");
-    }
+            <div class="stat-pill"><span class="stat-val">$${fmt(data.total)}</span><span class="stat-key">Total Cost</span></div>
+            <div class="stat-pill"><span class="stat-val">$${fmt(data.finalRent)}</span><span class="stat-key">Final Monthly</span></div>
+            <div class="stat-pill"><span class="stat-val">+${data.increase.toFixed(1)}%</span><span class="stat-key">Increase</span></div>
+        </div>`;
 
     document.getElementById("quickResult").classList.remove("hidden");
 }
 
 
-// ── SHARED RENT CALCULATION HELPERS ──────────────────────────────────────
+// ── LOCAL CALCULATION ENGINE (Phase 1 only) ───────────────────────────────
+// These functions mirror backend_functions.cpp exactly.
+// When USE_BACKEND = true, these are never called —
+// the C++ backend handles everything instead.
 
-// Core projection engine — mirrors the C++ logic from the report
-function projectRent(initial, rate, months) {
+// Mirrors: projectRent() in backend_functions.cpp
+function localProjectRent(initial, rate, months, budget) {
     let total = 0, rent = initial, rows = [];
 
     for (let m = 1; m <= months; m++) {
-        // Apply annual increase at the start of each new year (after month 12, 24…)
         if (m > 1 && (m - 1) % 12 === 0) rent *= (1 + rate / 100);
         total += rent;
-
-        // Collect a snapshot at the end of each year and at the final month
         if (m % 12 === 0 || m === months) {
             rows.push({
                 label: m % 12 === 0 ? "Year " + (m / 12) : "Month " + m + " (partial)",
                 rent,
-                total
+                cumulative: total
             });
         }
     }
 
-    return { total, finalRent: rent, rows };
+    const finalRent = rent;
+    const increase  = ((finalRent - initial) / initial) * 100;
+    const result    = { total, finalRent, increase, rows, budgetProvided: false, overBudget: false };
+
+    if (budget && budget > 0) {
+        result.budgetProvided = true;
+        if (total > budget) {
+            result.overBudget     = true;
+            result.overBy         = total - budget;
+            result.feasibleMonths = localFeasibleDuration(initial, rate, budget);
+        } else {
+            result.overBudget   = false;
+            result.spareAmount  = budget - total;
+        }
+    }
+
+    return result;
 }
 
-// Feasible duration — mirrors valid_years() from the report
-// Returns the maximum number of months affordable within a given budget
-function feasibleDuration(initial, rate, budget) {
+// Mirrors: feasibleDuration() in backend_functions.cpp
+function localFeasibleDuration(initial, rate, budget) {
     let total = 0, rent = initial, months = 0;
-
     while (true) {
         months++;
         if (months > 1 && (months - 1) % 12 === 0) rent *= (1 + rate / 100);
         total += rent;
         if (total > budget || months >= 600) break;
     }
-
-    // Step back one — the month that pushed us over is not affordable
     return Math.max(0, months - 1);
+}
+
+
+// ── RENDER HELPERS ────────────────────────────────────────────────────────
+// These take the data object (from either backend or local)
+// and update the DOM — pure UI, no calculation logic
+
+function renderRentResult(data, alertId, statsId, feasibleId, breakdownId, boxId) {
+    const alertEl    = document.getElementById(alertId);
+    const feasibleEl = document.getElementById(feasibleId);
+
+    if (data.budgetProvided) {
+        if (data.overBudget) {
+            alertEl.className = "budget-alert over";
+            alertEl.innerHTML = `<span class="alert-icon">⚠️</span>
+                <span>Your projected total of <strong>$${fmt(data.total)}</strong> exceeds your budget by <strong>$${fmt(data.overBy)}</strong>. See below for how long you can afford this rent.</span>`;
+            alertEl.classList.remove("hidden");
+            feasibleEl.innerHTML = `⏱️ With your budget, you can afford this rent for a maximum of <strong>${data.feasibleMonths} month${data.feasibleMonths !== 1 ? "s" : ""}</strong> (${(data.feasibleMonths / 12).toFixed(1)} years).`;
+            feasibleEl.classList.remove("hidden");
+        } else {
+            alertEl.className = "budget-alert ok";
+            alertEl.innerHTML = `<span class="alert-icon">✅</span>
+                <span>This rent fits your budget. You will have <strong>$${fmt(data.spareAmount)}</strong> to spare over the full term.</span>`;
+            alertEl.classList.remove("hidden");
+            feasibleEl.classList.add("hidden");
+        }
+    } else {
+        alertEl.classList.add("hidden");
+        feasibleEl.classList.add("hidden");
+    }
+
+    document.getElementById(statsId).innerHTML = `
+        <div class="stat-pill"><span class="stat-val">$${fmt(data.total)}</span><span class="stat-key">Total Cost</span></div>
+        <div class="stat-pill"><span class="stat-val">$${fmt(data.finalRent)}</span><span class="stat-key">Final Monthly</span></div>
+        <div class="stat-pill"><span class="stat-val">+${data.increase.toFixed(1)}%</span><span class="stat-key">Total Increase</span></div>
+    `;
+
+    document.getElementById(breakdownId).innerHTML = buildTable(data.rows);
+
+    const box = document.getElementById(boxId);
+    box.classList.remove("hidden");
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function buildTable(rows) {
@@ -329,10 +392,9 @@ function buildTable(rows) {
         <thead><tr><th>Period</th><th>Monthly Rent</th><th>Cumulative Total</th></tr></thead>
         <tbody>`;
     rows.forEach(r => {
-        tbl += `<tr><td>${r.label}</td><td>$${fmt(r.rent)}</td><td>$${fmt(r.total)}</td></tr>`;
+        tbl += `<tr><td>${r.label}</td><td>$${fmt(r.rent)}</td><td>$${fmt(r.cumulative)}</td></tr>`;
     });
-    tbl += "</tbody></table>";
-    return tbl;
+    return tbl + "</tbody></table>";
 }
 
 function fmt(n) {
@@ -340,112 +402,36 @@ function fmt(n) {
 }
 
 
-// ── DEADLINE & RENEWAL TRACKER ────────────────────────────────────────────
-
-const DEADLINE_ICONS = {
-    renewal:    "🔄",
-    payment:    "💳",
-    inspection: "🔍",
-    notice:     "📨",
-    other:      "📌"
-};
-
-function addDeadline() {
-    const label = document.getElementById("deadlineLabel").value.trim();
-    const date  = document.getElementById("deadlineDate").value;
-    const type  = document.getElementById("deadlineType").value;
-
-    if (!label) { shake(document.getElementById("deadlineLabel")); return; }
-    if (!date)  { shake(document.getElementById("deadlineDate"));  return; }
-
-    deadlines.push({ id: ++deadlineIdCounter, label, date, type });
-
-    // Sort by date ascending
-    deadlines.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Reset form
-    document.getElementById("deadlineLabel").value = "";
-    document.getElementById("deadlineDate").value  = "";
-
-    renderDeadlines();
-}
-
-function removeDeadline(id) {
-    deadlines = deadlines.filter(d => d.id !== id);
-    renderDeadlines();
-}
-
-function renderDeadlines() {
-    const list = document.getElementById("trackerList");
-
-    if (!deadlines.length) {
-        list.innerHTML = `<p class="tracker-empty">No deadlines yet — add one to get started</p>`;
-        return;
-    }
-
-    list.innerHTML = deadlines.map(d => {
-        const today     = new Date(); today.setHours(0,0,0,0);
-        const target    = new Date(d.date + "T00:00:00");
-        const diffMs    = target - today;
-        const diffDays  = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-        let urgencyClass, countdownClass, countdownText;
-
-        if (diffDays < 0) {
-            urgencyClass   = "past";
-            countdownClass = "countdown-past";
-            countdownText  = `${Math.abs(diffDays)}d ago`;
-        } else if (diffDays <= 7) {
-            urgencyClass   = "urgent";
-            countdownClass = "countdown-urgent";
-            countdownText  = diffDays === 0 ? "Today!" : `${diffDays}d left`;
-        } else if (diffDays <= 30) {
-            urgencyClass   = "soon";
-            countdownClass = "countdown-soon";
-            countdownText  = `${diffDays}d left`;
-        } else {
-            urgencyClass   = "future";
-            countdownClass = "countdown-future";
-            // Show in weeks or months for distant dates
-            if (diffDays >= 60) {
-                const months = Math.round(diffDays / 30);
-                countdownText = `~${months}mo`;
-            } else {
-                const weeks = Math.round(diffDays / 7);
-                countdownText = `~${weeks}wk`;
-            }
-        }
-
-        const formattedDate = target.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-        const icon = DEADLINE_ICONS[d.type] || "📌";
-
-        return `
-        <div class="deadline-item ${urgencyClass}">
-            <span class="deadline-type-icon">${icon}</span>
-            <div class="deadline-info">
-                <p class="deadline-label">${esc(d.label)}</p>
-                <p class="deadline-date">${formattedDate}</p>
-            </div>
-            <span class="deadline-countdown ${countdownClass}">${countdownText}</span>
-            <button class="deadline-delete" onclick="removeDeadline(${d.id})" title="Remove">✕</button>
-        </div>`;
-    }).join("");
-}
-
-
 // ── BUILDING SEARCH ───────────────────────────────────────────────────────
+// Phase 2: GET /api/buildings?q=studio
+// storage.cpp -> searchBuildings() handles the filtering
 
-function searchBuilding() {
-    const q    = document.getElementById("buildingInput").value.trim().toLowerCase();
+async function searchBuilding() {
+    const q    = document.getElementById("buildingInput").value.trim();
     const grid = document.getElementById("buildingsGrid");
 
     if (!q) { shake(document.getElementById("buildingInput")); return; }
 
-    const results = BUILDINGS.filter(b =>
-        b.name.toLowerCase().includes(q)    ||
-        b.address.toLowerCase().includes(q) ||
-        b.type.toLowerCase().includes(q)
-    );
+    let results;
+
+    if (USE_BACKEND) {
+        // Phase 2: fetch from C++ backend
+        try {
+            const res = await fetch(`${API_BASE}/buildings?q=${encodeURIComponent(q)}`);
+            results = await res.json();
+        } catch (e) {
+            grid.innerHTML = `<p class="placeholder-text">Could not reach the backend.</p>`;
+            return;
+        }
+    } else {
+        // Phase 1: filter locally — mirrors searchBuildings() in storage.cpp
+        const lower = q.toLowerCase();
+        results = BUILDINGS.filter(b =>
+            b.name.toLowerCase().includes(lower)    ||
+            b.address.toLowerCase().includes(lower) ||
+            b.type.toLowerCase().includes(lower)
+        );
+    }
 
     if (!results.length) {
         grid.innerHTML = `<p class="placeholder-text">😕 No results for "<strong>${esc(q)}</strong>". Try "Sunrise", "Tower", "Studio", or "Heritage".</p>`;
@@ -453,13 +439,12 @@ function searchBuilding() {
     }
 
     grid.innerHTML = results.map(b => {
-        const all = allReviews(b.id);
-        const avg = avgRating(all);
-        const img = b.image ? `<img src="${esc(b.image)}" alt="">` : b.emoji;
+        const all   = allReviews(b.id, b.reviews);
+        const avg   = avgRating(all);
+        const img   = b.image ? `<img src="${esc(b.image)}" alt="">` : b.emoji;
         const avail = b.available
             ? `<span class="badge badge-yes">Available</span>`
             : `<span class="badge badge-no">Unavailable</span>`;
-
         return `
         <div class="building-card" onclick="openBuilding(${b.id})">
             <div class="building-card-img">${img}</div>
@@ -480,76 +465,70 @@ function searchBuilding() {
 
 
 // ── BUILDING DETAIL PAGE ──────────────────────────────────────────────────
+// Phase 2: GET /api/buildings/:id
+// storage.cpp -> findBuildingById() + toJSON()
 
-function openBuilding(id) {
-    const b = BUILDINGS.find(x => x.id === id);
+async function openBuilding(id) {
+    let b;
+
+    if (USE_BACKEND) {
+        // Phase 2: fetch full building from C++ backend
+        try {
+            const res = await fetch(`${API_BASE}/buildings/${id}`);
+            b = await res.json();
+        } catch (e) {
+            alert("Could not load building details."); return;
+        }
+    } else {
+        // Phase 1: find in local array
+        b = BUILDINGS.find(x => x.id === id);
+    }
+
     if (!b) return;
     currentId = id;
 
-    const all = allReviews(id);
+    const all = allReviews(id, b.reviews);
     const avg = avgRating(all);
 
-    // Image
     document.getElementById("bHeroImg").innerHTML = b.image
         ? `<img src="${esc(b.image)}" alt="${esc(b.name)}">`
         : b.emoji;
 
-    // Badges
     const availBadge = b.available
         ? `<span class="badge badge-yes">✓ Available</span>`
         : `<span class="badge badge-no">✗ Unavailable</span>`;
     document.getElementById("bBadges").innerHTML =
         `<span class="badge badge-type">${esc(b.type)}</span>${availBadge}`;
 
-    // Info
     document.getElementById("bName").textContent    = b.name;
     document.getElementById("bAddress").textContent = "📍 " + b.address;
     document.getElementById("bDesc").textContent    = b.description;
 
-    // Rating
     document.getElementById("bRatingRow").innerHTML = avg > 0
         ? `<span class="b-rating-num">${avg.toFixed(1)}</span>
            <span class="b-rating-stars" style="color:#f59e0b">${starHTML(avg)}</span>
            <span class="b-rating-count">${all.length} review${all.length !== 1 ? "s" : ""}</span>`
         : `<span class="b-rating-count">No reviews yet</span>`;
 
-    // Stats strip
     document.getElementById("bStatsStrip").innerHTML = `
-        <div class="stat-chip">
-            <span class="chip-val">$${b.monthlyRent.toLocaleString()}<small style="font-size:0.65rem;font-weight:400">/mo</small></span>
-            <span class="chip-key">Monthly Rent</span>
-        </div>
-        <div class="stat-chip">
-            <span class="chip-val">${b.bedrooms} bed · ${b.bathrooms} bath</span>
-            <span class="chip-key">Rooms</span>
-        </div>
-        <div class="stat-chip">
-            <span class="chip-val">${b.sqft.toLocaleString()} sq ft</span>
-            <span class="chip-key">Size</span>
-        </div>
-        <div class="stat-chip">
-            <span class="chip-val">${esc(b.type)}</span>
-            <span class="chip-key">Property Type</span>
-        </div>
+        <div class="stat-chip"><span class="chip-val">$${b.monthlyRent.toLocaleString()}<small style="font-size:0.65rem;font-weight:400">/mo</small></span><span class="chip-key">Monthly Rent</span></div>
+        <div class="stat-chip"><span class="chip-val">${b.bedrooms} bed · ${b.bathrooms} bath</span><span class="chip-key">Rooms</span></div>
+        <div class="stat-chip"><span class="chip-val">${b.sqft.toLocaleString()} sq ft</span><span class="chip-key">Size</span></div>
+        <div class="stat-chip"><span class="chip-val">${esc(b.type)}</span><span class="chip-key">Property Type</span></div>
     `;
 
-    // Amenities
     document.getElementById("bAmenities").innerHTML =
         b.amenities.map(a => `<span class="amenity-tag">${esc(a)}</span>`).join("");
 
-    // Reviews
     renderReviews(all);
 
-    // Reset review form
     document.getElementById("reviewText").value       = "";
     document.getElementById("ratingValue").value      = "0";
     document.getElementById("submitNote").textContent = "";
     document.querySelectorAll("#starRating .star").forEach(s => s.classList.remove("active"));
-
-    // Reset quick calculator
-    document.getElementById("quickRate").value   = "";
-    document.getElementById("quickMonths").value = "";
-    document.getElementById("quickBudget").value = "";
+    document.getElementById("quickRate").value    = "";
+    document.getElementById("quickMonths").value  = "";
+    document.getElementById("quickBudget").value  = "";
     document.getElementById("quickResult").classList.add("hidden");
 
     initStars();
@@ -570,7 +549,9 @@ function renderReviews(all) {
         : `<p class="no-reviews">No reviews yet — be the first to share your experience!</p>`;
 }
 
-function submitReview() {
+// Phase 2: POST /api/buildings/:id/reviews
+// storage.cpp -> addReviewToBuilding() writes to buildings.json
+async function submitReview() {
     const rating = parseInt(document.getElementById("ratingValue").value);
     const text   = document.getElementById("reviewText").value.trim();
     const note   = document.getElementById("submitNote");
@@ -578,14 +559,38 @@ function submitReview() {
     if (!rating) { note.style.color = "#dc2626"; note.textContent = "Please select a star rating first."; return; }
     if (!text)   { note.style.color = "#dc2626"; note.textContent = "Please write a short review."; return; }
 
-    const now = new Date().toLocaleString("en-US", { month: "short", year: "numeric" });
-    if (!userReviews[currentId]) userReviews[currentId] = [];
-    userReviews[currentId].push({ stars: rating, date: now, text });
+    const now = new Date();
 
-    const all = allReviews(currentId);
+    if (USE_BACKEND) {
+        // Phase 2: POST to C++ backend — storage.cpp saves to buildings.json
+        try {
+            await fetch(`${API_BASE}/buildings/${currentId}/reviews`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    stars: rating,
+                    day:   now.getDate(),
+                    month: now.getMonth() + 1,
+                    year:  now.getFullYear(),
+                    text
+                })
+            });
+        } catch (e) {
+            note.style.color = "#dc2626";
+            note.textContent = "Could not save review. Please try again.";
+            return;
+        }
+    } else {
+        // Phase 1: store in memory
+        const dateStr = now.toLocaleString("en-US", { month: "short", year: "numeric" });
+        if (!userReviews[currentId]) userReviews[currentId] = [];
+        userReviews[currentId].push({ stars: rating, date: dateStr, text });
+    }
+
+    const b   = BUILDINGS.find(x => x.id === currentId);
+    const all = allReviews(currentId, b ? b.reviews : []);
     const avg = avgRating(all);
 
-    // Update rating row
     document.getElementById("bRatingRow").innerHTML = `
         <span class="b-rating-num">${avg.toFixed(1)}</span>
         <span class="b-rating-stars" style="color:#f59e0b">${starHTML(avg)}</span>
@@ -593,7 +598,6 @@ function submitReview() {
 
     renderReviews(all);
 
-    // Reset form
     document.getElementById("reviewText").value  = "";
     document.getElementById("ratingValue").value = "0";
     document.querySelectorAll("#starRating .star").forEach(s => s.classList.remove("active"));
@@ -602,12 +606,75 @@ function submitReview() {
 }
 
 
+// ── DEADLINE TRACKER ──────────────────────────────────────────────────────
+
+const DEADLINE_ICONS = {
+    renewal: "🔄", payment: "💳",
+    inspection: "🔍", notice: "📨", other: "📌"
+};
+
+function addDeadline() {
+    const label = document.getElementById("deadlineLabel").value.trim();
+    const date  = document.getElementById("deadlineDate").value;
+    const type  = document.getElementById("deadlineType").value;
+
+    if (!label) { shake(document.getElementById("deadlineLabel")); return; }
+    if (!date)  { shake(document.getElementById("deadlineDate"));  return; }
+
+    deadlines.push({ id: ++deadlineIdCounter, label, date, type });
+    deadlines.sort((a, b) => new Date(a.date) - new Date(b.date));
+    document.getElementById("deadlineLabel").value = "";
+    document.getElementById("deadlineDate").value  = "";
+    renderDeadlines();
+}
+
+function removeDeadline(id) {
+    deadlines = deadlines.filter(d => d.id !== id);
+    renderDeadlines();
+}
+
+function renderDeadlines() {
+    const list = document.getElementById("trackerList");
+    if (!deadlines.length) {
+        list.innerHTML = `<p class="tracker-empty">No deadlines yet — add one to get started</p>`;
+        return;
+    }
+
+    list.innerHTML = deadlines.map(d => {
+        const today    = new Date(); today.setHours(0,0,0,0);
+        const target   = new Date(d.date + "T00:00:00");
+        const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
+
+        let urgencyClass, countdownClass, countdownText;
+        if      (diffDays < 0)   { urgencyClass = "past";   countdownClass = "countdown-past";   countdownText = `${Math.abs(diffDays)}d ago`; }
+        else if (diffDays <= 7)  { urgencyClass = "urgent"; countdownClass = "countdown-urgent"; countdownText = diffDays === 0 ? "Today!" : `${diffDays}d left`; }
+        else if (diffDays <= 30) { urgencyClass = "soon";   countdownClass = "countdown-soon";   countdownText = `${diffDays}d left`; }
+        else {
+            urgencyClass   = "future";
+            countdownClass = "countdown-future";
+            countdownText  = diffDays >= 60 ? `~${Math.round(diffDays/30)}mo` : `~${Math.round(diffDays/7)}wk`;
+        }
+
+        const formatted = target.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        return `
+        <div class="deadline-item ${urgencyClass}">
+            <span class="deadline-type-icon">${DEADLINE_ICONS[d.type] || "📌"}</span>
+            <div class="deadline-info">
+                <p class="deadline-label">${esc(d.label)}</p>
+                <p class="deadline-date">${formatted}</p>
+            </div>
+            <span class="deadline-countdown ${countdownClass}">${countdownText}</span>
+            <button class="deadline-delete" onclick="removeDeadline(${d.id})" title="Remove">✕</button>
+        </div>`;
+    }).join("");
+}
+
+
 // ── STAR RATING WIDGET ────────────────────────────────────────────────────
 
 function initStars() {
     const stars = document.querySelectorAll("#starRating .star");
     const input = document.getElementById("ratingValue");
-
     stars.forEach(star => {
         star.addEventListener("mouseover", () => {
             const v = parseInt(star.dataset.val);
@@ -619,18 +686,18 @@ function initStars() {
         });
         star.addEventListener("click", () => {
             input.value = star.dataset.val;
-            const sel   = parseInt(input.value);
-            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= sel));
+            stars.forEach(s => s.classList.toggle("active", parseInt(s.dataset.val) <= parseInt(input.value)));
         });
     });
 }
 
 
-// ── HELPERS ───────────────────────────────────────────────────────────────
+// ── SHARED HELPERS ────────────────────────────────────────────────────────
 
-function allReviews(id) {
-    const b = BUILDINGS.find(x => x.id === id);
-    return [...(b ? b.reviews : []), ...(userReviews[id] || [])];
+// Combines stored reviews with any user-submitted ones in memory
+// Phase 2: all reviews come from storage.cpp — userReviews{} is not needed
+function allReviews(id, storedReviews) {
+    return [...(storedReviews || []), ...(userReviews[id] || [])];
 }
 
 function avgRating(reviews) {
@@ -647,8 +714,8 @@ function starHTML(rating) {
 
 function esc(s) {
     return String(s)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function shake(el) {
@@ -658,4 +725,4 @@ function shake(el) {
     el.addEventListener("animationend", () => el.style.animation = "", { once: true });
 }
 
-console.log("Rental Contract Helper — Phase 1 loaded ✓");
+console.log(`Rental Contract Helper — ${USE_BACKEND ? "Phase 2 (backend)" : "Phase 1 (local)"} loaded ✓`);
