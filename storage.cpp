@@ -1,512 +1,624 @@
 // ══════════════════════════════════════════════
-//  storage.cpp
-//  Rental Contract Helper — Phase 2 backend
+//  Storage.java
+//  Rental Contract Helper — Backend
 //
-//  Building and Review classes with JSON
-//  file storage using nlohmann/json.hpp
-//  Migrated and expanded from storage.cpp stub
+//  All data management — buildings, reviews,
+//  deadlines. Translated from storage.cpp and
+//  script.js. Uses JSON for file storage.
+//  Phase 2: connects to Firebase Firestore.
+//
+//  Compile:  javac Storage.java
+//  Run:      java Storage
 // ══════════════════════════════════════════════
 
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <string>
-#include <stdexcept>
-#include "header_files/json.hpp"
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.time.*;
+import java.time.format.*;
 
-using namespace std;
-using json = nlohmann::json;
+// NOTE: In Phase 2, add the Firebase Admin SDK
+// and replace the JSON file methods with
+// Firestore calls. The class structure stays
+// exactly the same — only the read/write
+// methods change.
 
-// File paths for persistent storage
-// These JSON files act as the database for Phase 2
-const string BUILDINGS_FILE = "data/buildings.json";
-const string REVIEWS_FILE   = "data/reviews.json";
+public class Storage {
 
-
-// ══════════════════════════════════════════════
-//  REVIEW CLASS
-//  Mirrors the review objects in script.js:
-//  { stars, date, text }
-// ══════════════════════════════════════════════
-
-class Review {
-private:
-    int    stars;    // 1–5
-    int    day;
-    int    month;
-    int    year;
-    string text;
-
-public:
-    // Default constructor
-    Review() : stars(0), day(0), month(0), year(0), text("") {}
-
-    // Full constructor
-    Review(int s, int d, int mo, int y, string t)
-        : stars(s), day(d), month(mo), year(y), text(t) {}
-
-    // Getters
-    int    getStars() const { return stars; }
-    int    getDay()   const { return day; }
-    int    getMonth() const { return month; }
-    int    getYear()  const { return year; }
-    string getText()  const { return text; }
-
-    // Setters
-    void setStars(int s)    { if (s >= 1 && s <= 5) stars = s; }
-    void setDay(int d)      { day   = d; }
-    void setMonth(int mo)   { month = mo; }
-    void setYear(int y)     { year  = y; }
-    void setText(string t)  { text  = t; }
-
-    // Returns a formatted date string e.g. "Apr 2025"
-    // Mirrors the date field format used in script.js reviews
-    string getFormattedDate() const {
-        const string months[] = {
-            "Jan","Feb","Mar","Apr","May","Jun",
-            "Jul","Aug","Sep","Oct","Nov","Dec"
-        };
-        if (month >= 1 && month <= 12)
-            return months[month - 1] + " " + to_string(year);
-        return to_string(year);
-    }
-
-    // Serialize to JSON
-    // Mirrors: { stars, date, text } in script.js
-    json toJSON() const {
-        return {
-            {"stars", stars},
-            {"day",   day},
-            {"month", month},
-            {"year",  year},
-            {"date",  getFormattedDate()},
-            {"text",  text}
-        };
-    }
-
-    // Deserialize from JSON
-    static Review fromJSON(const json& j) {
-        Review r;
-        r.stars = j.value("stars", 0);
-        r.day   = j.value("day",   0);
-        r.month = j.value("month", 0);
-        r.year  = j.value("year",  0);
-        r.text  = j.value("text",  "");
-        return r;
-    }
-
-    // Print to console
-    void print() const {
-        cout << "  [" << stars << "/5] " << getFormattedDate()
-             << " — " << text << endl;
-    }
-};
+    // ── File paths ────────────────────────────────────────────────────────
+    // Phase 2: these are replaced by Firestore collections
+    private static final String DATA_DIR       = "data/";
+    private static final String BUILDINGS_FILE = DATA_DIR + "buildings.json";
+    private static final String REVIEWS_FILE   = DATA_DIR + "reviews.json";
+    private static final String DEADLINES_FILE = DATA_DIR + "deadlines.json";
 
 
-// ══════════════════════════════════════════════
-//  BUILDING CLASS
-//  Mirrors the building objects in script.js:
-//  { id, name, address, type, monthlyRent,
-//    bedrooms, bathrooms, sqft, available,
-//    amenities, description, reviews }
-// ══════════════════════════════════════════════
+    // ══════════════════════════════════════════
+    //  REVIEW CLASS
+    //  Mirrors the review objects in script.js:
+    //  { stars, date, text, userId }
+    //  and the Review class in storage.cpp
+    // ══════════════════════════════════════════
 
-class Building {
-private:
-    static int ctr;   // auto-increment id counter
+    public static class Review {
+        public String id;
+        public int    stars;
+        public int    day;
+        public int    month;
+        public int    year;
+        public String text;
+        public String userId;     // anonymous if not logged in
+        public String buildingId; // which building this belongs to
 
-    int            id;
-    string         name;
-    string         address;
-    string         type;         // "Apartment", "Condo", "Studio" etc.
-    string         image;        // filename, empty string if none
-    string         emoji;        // fallback display character
-    int            monthlyRent;
-    int            bedrooms;
-    int            bathrooms;
-    int            sqft;
-    bool           available;
-    vector<string> amenities;
-    string         description;
-    vector<Review> reviews;
-
-public:
-    // Default constructor — mirrors the stub in storage.cpp
-    Building() {
-        id          = ctr++;
-        name        = "Unnamed";
-        address     = "";
-        type        = "";
-        image       = "";
-        emoji       = "🏢";
-        monthlyRent = 0;
-        bedrooms    = 0;
-        bathrooms   = 0;
-        sqft        = 0;
-        available   = true;
-        description = "";
-    }
-
-    // Full constructor
-    Building(string nm, string addr, string tp, string img, string em,
-             int cost, int beds, int baths, int sz, bool avail,
-             vector<string> amen, string desc)
-    {
-        id          = ctr++;
-        name        = nm;
-        address     = addr;
-        type        = tp;
-        image       = img;
-        emoji       = em;
-        monthlyRent = cost;
-        bedrooms    = beds;
-        bathrooms   = baths;
-        sqft        = sz;
-        available   = avail;
-        amenities   = amen;
-        description = desc;
-    }
-
-    // ── Getters ──────────────────────────────
-
-    int            getId()          const { return id; }
-    string         getName()        const { return name; }
-    string         getAddress()     const { return address; }
-    string         getType()        const { return type; }
-    string         getImage()       const { return image; }
-    string         getEmoji()       const { return emoji; }
-    int            getMonthlyRent() const { return monthlyRent; }
-    int            getBedrooms()    const { return bedrooms; }
-    int            getBathrooms()   const { return bathrooms; }
-    int            getSqft()        const { return sqft; }
-    bool           isAvailable()    const { return available; }
-    vector<string> getAmenities()   const { return amenities; }
-    string         getDescription() const { return description; }
-    vector<Review> getReviews()     const { return reviews; }
-
-    // ── Setters ──────────────────────────────
-
-    void setName(string n)           { name        = n; }
-    void setAddress(string a)        { address     = a; }
-    void setType(string t)           { type        = t; }
-    void setImage(string i)          { image       = i; }
-    void setEmoji(string e)          { emoji       = e; }
-    void setMonthlyRent(int r)       { if (r >= 0) monthlyRent = r; }
-    void setBedrooms(int b)          { if (b >= 0) bedrooms    = b; }
-    void setBathrooms(int b)         { if (b >= 0) bathrooms   = b; }
-    void setSqft(int s)              { if (s >= 0) sqft        = s; }
-    void setAvailable(bool a)        { available   = a; }
-    void setDescription(string d)    { description = d; }
-    void addAmenity(string amenity)  { amenities.push_back(amenity); }
-
-    // ── Review management ─────────────────────
-
-    // Add a new review
-    // Mirrors: userReviews[id].push({ stars, date, text }) in script.js
-    void addReview(const Review& r) {
-        reviews.push_back(r);
-    }
-
-    // Calculate average star rating across all reviews
-    // Mirrors: avgRating() in script.js
-    double getAverageRating() const {
-        if (reviews.empty()) return 0.0;
-        double total = 0;
-        for (const Review& r : reviews)
-            total += r.getStars();
-        return total / reviews.size();
-    }
-
-    // ── Serialization ─────────────────────────
-
-    // Serialize to JSON
-    // Mirrors the BUILDINGS array structure in script.js
-    json toJSON() const {
-        json j;
-        j["id"]          = id;
-        j["name"]        = name;
-        j["address"]     = address;
-        j["type"]        = type;
-        j["image"]       = image;
-        j["emoji"]       = emoji;
-        j["monthlyRent"] = monthlyRent;
-        j["bedrooms"]    = bedrooms;
-        j["bathrooms"]   = bathrooms;
-        j["sqft"]        = sqft;
-        j["available"]   = available;
-        j["description"] = description;
-
-        json amenitiesArr = json::array();
-        for (const string& a : amenities)
-            amenitiesArr.push_back(a);
-        j["amenities"] = amenitiesArr;
-
-        json reviewsArr = json::array();
-        for (const Review& r : reviews)
-            reviewsArr.push_back(r.toJSON());
-        j["reviews"] = reviewsArr;
-
-        return j;
-    }
-
-    // Deserialize from JSON
-    static Building fromJSON(const json& j) {
-        Building b;
-        b.id          = j.value("id",          0);
-        b.name        = j.value("name",        "");
-        b.address     = j.value("address",     "");
-        b.type        = j.value("type",        "");
-        b.image       = j.value("image",       "");
-        b.emoji       = j.value("emoji",       "🏢");
-        b.monthlyRent = j.value("monthlyRent", 0);
-        b.bedrooms    = j.value("bedrooms",    0);
-        b.bathrooms   = j.value("bathrooms",   0);
-        b.sqft        = j.value("sqft",        0);
-        b.available   = j.value("available",   true);
-        b.description = j.value("description", "");
-
-        if (j.contains("amenities")) {
-            for (const auto& a : j["amenities"])
-                b.amenities.push_back(a.get<string>());
+        // Default constructor
+        public Review() {
+            this.userId = "anonymous";
         }
 
-        if (j.contains("reviews")) {
-            for (const auto& r : j["reviews"])
-                b.reviews.push_back(Review::fromJSON(r));
+        // Full constructor
+        public Review(String buildingId, int stars, int day,
+                       int month, int year, String text, String userId) {
+            this.id         = UUID.randomUUID().toString();
+            this.buildingId = buildingId;
+            this.stars      = stars;
+            this.day        = day;
+            this.month      = month;
+            this.year       = year;
+            this.text       = text;
+            this.userId     = userId != null ? userId : "anonymous";
         }
 
+        /** Returns a formatted date string e.g. "Apr 2025" — mirrors script.js date format */
+        public String getFormattedDate() {
+            String[] months = {"Jan","Feb","Mar","Apr","May","Jun",
+                               "Jul","Aug","Sep","Oct","Nov","Dec"};
+            if (month >= 1 && month <= 12)
+                return months[month - 1] + " " + year;
+            return String.valueOf(year);
+        }
+
+        /** Serialize to a simple JSON string */
+        public String toJSON() {
+            return String.format(
+                "{\"id\":\"%s\",\"buildingId\":\"%s\",\"stars\":%d," +
+                "\"day\":%d,\"month\":%d,\"year\":%d," +
+                "\"date\":\"%s\",\"text\":\"%s\",\"userId\":\"%s\"}",
+                esc(id), esc(buildingId), stars,
+                day, month, year,
+                esc(getFormattedDate()), esc(text), esc(userId)
+            );
+        }
+
+        /** Print to terminal */
+        public void print() {
+            System.out.printf("    [%d★] %s — %s%n",
+                stars, getFormattedDate(), text);
+        }
+    }
+
+
+    // ══════════════════════════════════════════
+    //  BUILDING CLASS
+    //  Mirrors the building objects in script.js:
+    //  { id, name, address, type, monthlyRent,
+    //    bedrooms, bathrooms, sqft, available,
+    //    amenities, description, reviews,
+    //    imageUrl, avgRating, reviewCount }
+    //  and the Building class in storage.cpp
+    // ══════════════════════════════════════════
+
+    public static class Building {
+        public String       id;
+        public String       name;
+        public String       address;
+        public String       type;
+        public String       imageUrl;    // Firebase Storage URL in Phase 2
+        public String       emoji;
+        public int          monthlyRent;
+        public int          bedrooms;
+        public int          bathrooms;
+        public int          sqft;
+        public boolean      available;
+        public List<String> amenities;
+        public String       description;
+        public List<Review> reviews;
+        public double       avgRating;
+        public int          reviewCount;
+        public String       addedBy;
+
+        // Default constructor — mirrors Building() in storage.cpp
+        public Building() {
+            this.id          = UUID.randomUUID().toString();
+            this.name        = "Unnamed";
+            this.address     = "";
+            this.type        = "Apartment";
+            this.imageUrl    = "";
+            this.emoji       = "🏢";
+            this.monthlyRent = 0;
+            this.bedrooms    = 0;
+            this.bathrooms   = 0;
+            this.sqft        = 0;
+            this.available   = true;
+            this.amenities   = new ArrayList<>();
+            this.description = "";
+            this.reviews     = new ArrayList<>();
+            this.avgRating   = 0;
+            this.reviewCount = 0;
+            this.addedBy     = "admin";
+        }
+
+        // Full constructor
+        public Building(String name, String address, String type,
+                         String imageUrl, String emoji, int monthlyRent,
+                         int bedrooms, int bathrooms, int sqft, boolean available,
+                         List<String> amenities, String description) {
+            this();
+            this.name        = name;
+            this.address     = address;
+            this.type        = type;
+            this.imageUrl    = imageUrl;
+            this.emoji       = emoji;
+            this.monthlyRent = monthlyRent;
+            this.bedrooms    = bedrooms;
+            this.bathrooms   = bathrooms;
+            this.sqft        = sqft;
+            this.available   = available;
+            this.amenities   = amenities;
+            this.description = description;
+        }
+
+        /** Adds a review and updates avgRating and reviewCount */
+        public void addReview(Review r) {
+            reviews.add(r);
+            reviewCount = reviews.size();
+            double total = 0;
+            for (Review rev : reviews) total += rev.stars;
+            avgRating = reviewCount > 0 ? total / reviewCount : 0;
+        }
+
+        /** Serialize to a simple JSON string */
+        public String toJSON() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+            sb.append(String.format("\"id\":\"%s\",", esc(id)));
+            sb.append(String.format("\"name\":\"%s\",", esc(name)));
+            sb.append(String.format("\"address\":\"%s\",", esc(address)));
+            sb.append(String.format("\"type\":\"%s\",", esc(type)));
+            sb.append(String.format("\"imageUrl\":\"%s\",", esc(imageUrl)));
+            sb.append(String.format("\"emoji\":\"%s\",", esc(emoji)));
+            sb.append(String.format("\"monthlyRent\":%d,", monthlyRent));
+            sb.append(String.format("\"bedrooms\":%d,", bedrooms));
+            sb.append(String.format("\"bathrooms\":%d,", bathrooms));
+            sb.append(String.format("\"sqft\":%d,", sqft));
+            sb.append(String.format("\"available\":%b,", available));
+            sb.append(String.format("\"avgRating\":%.2f,", avgRating));
+            sb.append(String.format("\"reviewCount\":%d,", reviewCount));
+            sb.append(String.format("\"description\":\"%s\",", esc(description)));
+            sb.append(String.format("\"addedBy\":\"%s\",", esc(addedBy)));
+
+            // amenities array
+            sb.append("\"amenities\":[");
+            for (int i = 0; i < amenities.size(); i++) {
+                sb.append("\"").append(esc(amenities.get(i))).append("\"");
+                if (i < amenities.size() - 1) sb.append(",");
+            }
+            sb.append("],");
+
+            // reviews array
+            sb.append("\"reviews\":[");
+            for (int i = 0; i < reviews.size(); i++) {
+                sb.append(reviews.get(i).toJSON());
+                if (i < reviews.size() - 1) sb.append(",");
+            }
+            sb.append("]");
+            sb.append("}");
+            return sb.toString();
+        }
+
+        /** Print summary to terminal */
+        public void print() {
+            System.out.printf("  [%s] %s%n", id.substring(0,8), name);
+            System.out.printf("       %s | %s | $%d/mo%n", address, type, monthlyRent);
+            System.out.printf("       %dbed/%dbath | %d sqft | %s%n",
+                bedrooms, bathrooms, sqft, available ? "Available" : "Unavailable");
+            System.out.printf("       Rating: %.1f/5 (%d reviews)%n",
+                avgRating, reviewCount);
+        }
+    }
+
+
+    // ══════════════════════════════════════════
+    //  DEADLINE CLASS
+    //  Mirrors the deadline objects in script.js
+    //  { id, label, date, type, userId }
+    // ══════════════════════════════════════════
+
+    public static class Deadline {
+        public String id;
+        public String label;
+        public String date;    // format: "YYYY-MM-DD"
+        public String type;    // renewal, payment, inspection, notice, other
+        public String userId;
+
+        public Deadline() {}
+
+        public Deadline(String label, String date, String type, String userId) {
+            this.id     = UUID.randomUUID().toString();
+            this.label  = label;
+            this.date   = date;
+            this.type   = type;
+            this.userId = userId != null ? userId : "guest";
+        }
+
+        /** Returns days until this deadline (negative = past) */
+        public long daysUntil() {
+            try {
+                LocalDate target = LocalDate.parse(date);
+                return LocalDate.now().until(target, java.time.temporal.ChronoUnit.DAYS);
+            } catch (Exception e) {
+                return 0;
+            }
+        }
+
+        /** Returns a human-readable countdown — mirrors renderDeadlines() in script.js */
+        public String getCountdown() {
+            long days = daysUntil();
+            if (days < 0)        return Math.abs(days) + "d ago";
+            else if (days == 0)  return "Today!";
+            else if (days <= 7)  return days + "d left";
+            else if (days <= 30) return days + "d left";
+            else if (days >= 60) return "~" + Math.round(days / 30.0) + "mo";
+            else                 return "~" + Math.round(days / 7.0) + "wk";
+        }
+
+        /** Returns urgency level — mirrors urgencyClass in script.js */
+        public String getUrgency() {
+            long days = daysUntil();
+            if      (days < 0)   return "PAST";
+            else if (days <= 7)  return "URGENT";
+            else if (days <= 30) return "SOON";
+            else                 return "FUTURE";
+        }
+
+        public String toJSON() {
+            return String.format(
+                "{\"id\":\"%s\",\"label\":\"%s\",\"date\":\"%s\"," +
+                "\"type\":\"%s\",\"userId\":\"%s\"}",
+                esc(id), esc(label), esc(date), esc(type), esc(userId)
+            );
+        }
+
+        public void print() {
+            System.out.printf("  [%s] %s — %s (%s) %s%n",
+                getUrgency(), label, date, type, getCountdown());
+        }
+    }
+
+
+    // ══════════════════════════════════════════
+    //  IN-MEMORY STORE
+    //  Phase 1: data lives here and in JSON files
+    //  Phase 2: replace with Firestore calls
+    // ══════════════════════════════════════════
+
+    private static List<Building> buildings = new ArrayList<>();
+    private static List<Deadline> deadlines = new ArrayList<>();
+
+
+    // ══════════════════════════════════════════
+    //  BUILDING OPERATIONS
+    //  Mirrors the Firestore operations in script.js
+    // ══════════════════════════════════════════
+
+    /**
+     * Add a new building to the store and save to file.
+     * Phase 2: addDoc(collection(db, "buildings"), ...) in script.js
+     */
+    public static Building addBuilding(Building b) {
+        buildings.add(b);
+        saveBuildings();
         return b;
     }
 
-    // Print summary to console
-    void print() const {
-        cout << "[" << id << "] " << name << " — " << address << endl;
-        cout << "     Type: " << type << " | Rent: $" << monthlyRent
-             << "/mo | " << bedrooms << "bed/" << bathrooms << "bath"
-             << " | " << sqft << " sqft" << endl;
-        cout << "     Available: " << (available ? "Yes" : "No") << endl;
-        cout << "     Rating: " << fixed << setprecision(1)
-             << getAverageRating() << "/5 (" << reviews.size() << " reviews)" << endl;
-    }
-};
-
-// Initialize static counter
-int Building::ctr = 1;
-
-
-// ══════════════════════════════════════════════
-//  STORAGE FUNCTIONS
-//  Read and write buildings + reviews to JSON
-//  files — this replaces the in-memory arrays
-//  in script.js (BUILDINGS, userReviews)
-// ══════════════════════════════════════════════
-
-// Save all buildings to JSON file
-// Mirrors: the BUILDINGS const array in script.js
-// but persists across sessions using a file
-void saveBuildings(const vector<Building>& buildings) {
-    json arr = json::array();
-    for (const Building& b : buildings)
-        arr.push_back(b.toJSON());
-
-    ofstream file(BUILDINGS_FILE);
-    if (!file.is_open())
-        throw runtime_error("Could not open file: " + BUILDINGS_FILE);
-
-    file << arr.dump(2);
-    file.close();
-    cout << "Saved " << buildings.size() << " buildings to " << BUILDINGS_FILE << endl;
-}
-
-// Load all buildings from JSON file
-// Called on server startup in Phase 2
-vector<Building> loadBuildings() {
-    vector<Building> buildings;
-    ifstream file(BUILDINGS_FILE);
-
-    if (!file.is_open()) {
-        cout << "No existing buildings file found. Starting fresh." << endl;
-        return buildings;
+    /**
+     * Find a building by its id.
+     * Phase 2: getDoc(doc(db, "buildings", id)) in script.js
+     */
+    public static Building findBuildingById(String id) {
+        for (Building b : buildings)
+            if (b.id.equals(id)) return b;
+        return null;
     }
 
-    json arr;
-    try {
-        file >> arr;
-    } catch (const json::parse_error& e) {
-        cerr << "JSON parse error in buildings file: " << e.what() << endl;
-        return buildings;
+    /**
+     * Search buildings by name, address, or type.
+     * Phase 2: getDocs + filter in script.js searchBuilding()
+     * Mirrors: searchBuildings() in storage.cpp
+     */
+    public static List<Building> searchBuildings(String query) {
+        String q = query.toLowerCase().trim();
+        List<Building> results = new ArrayList<>();
+        for (Building b : buildings) {
+            if (b.name.toLowerCase().contains(q)    ||
+                b.address.toLowerCase().contains(q) ||
+                b.type.toLowerCase().contains(q)) {
+                results.add(b);
+            }
+        }
+        return results;
     }
-    file.close();
 
-    for (const auto& j : arr)
-        buildings.push_back(Building::fromJSON(j));
-
-    cout << "Loaded " << buildings.size() << " buildings from " << BUILDINGS_FILE << endl;
-    return buildings;
-}
-
-// Find a building by id
-// Mirrors: BUILDINGS.find(b => b.id === id) in script.js
-Building* findBuildingById(vector<Building>& buildings, int id) {
-    for (Building& b : buildings) {
-        if (b.getId() == id)
-            return &b;
+    /**
+     * Get all buildings.
+     * Phase 2: getDocs(collection(db, "buildings")) in script.js
+     */
+    public static List<Building> getAllBuildings() {
+        return new ArrayList<>(buildings);
     }
-    return nullptr;
-}
 
-// Search buildings by query string — name, address, or type
-// Mirrors: searchBuilding() filter in script.js
-vector<Building> searchBuildings(const vector<Building>& buildings, const string& query) {
-    vector<Building> results;
-    string q = query;
 
-    // Convert query to lowercase
-    for (char& c : q) c = tolower(c);
+    // ══════════════════════════════════════════
+    //  REVIEW OPERATIONS
+    //  Mirrors Firestore subcollection in script.js
+    // ══════════════════════════════════════════
 
-    for (const Building& b : buildings) {
-        string name    = b.getName();
-        string address = b.getAddress();
-        string type    = b.getType();
+    /**
+     * Add a review to a building and update its average rating.
+     * Phase 2: addDoc(collection(db, "buildings", id, "reviews"), ...) in script.js
+     * Mirrors: addReviewToBuilding() in storage.cpp
+     */
+    public static boolean addReview(String buildingId, int stars,
+                                     int day, int month, int year,
+                                     String text, String userId) {
+        Building b = findBuildingById(buildingId);
+        if (b == null) {
+            System.out.println("Building not found: " + buildingId);
+            return false;
+        }
+        Review r = new Review(buildingId, stars, day, month, year, text, userId);
+        b.addReview(r);
+        saveBuildings();
+        return true;
+    }
 
-        // Convert fields to lowercase for comparison
-        for (char& c : name)    c = tolower(c);
-        for (char& c : address) c = tolower(c);
-        for (char& c : type)    c = tolower(c);
+    /**
+     * Get all reviews for a building.
+     * Phase 2: getDocs(collection(db, "buildings", id, "reviews")) in script.js
+     */
+    public static List<Review> getReviews(String buildingId) {
+        Building b = findBuildingById(buildingId);
+        if (b == null) return new ArrayList<>();
+        return new ArrayList<>(b.reviews);
+    }
 
-        if (name.find(q)    != string::npos ||
-            address.find(q) != string::npos ||
-            type.find(q)    != string::npos)
-        {
-            results.push_back(b);
+
+    // ══════════════════════════════════════════
+    //  DEADLINE OPERATIONS
+    //  Mirrors Firestore user subcollection in script.js
+    // ══════════════════════════════════════════
+
+    /**
+     * Add a deadline for a user.
+     * Phase 2: addDoc(collection(db, "users", uid, "deadlines"), ...) in script.js
+     */
+    public static Deadline addDeadline(String label, String date,
+                                        String type, String userId) {
+        Deadline d = new Deadline(label, date, type, userId);
+        deadlines.add(d);
+        // Sort by date
+        deadlines.sort(Comparator.comparing(dl -> dl.date));
+        saveDeadlines();
+        return d;
+    }
+
+    /**
+     * Get all deadlines for a user, sorted by date.
+     * Phase 2: getDocs(collection(db, "users", uid, "deadlines")) in script.js
+     */
+    public static List<Deadline> getDeadlines(String userId) {
+        List<Deadline> result = new ArrayList<>();
+        for (Deadline d : deadlines)
+            if (d.userId.equals(userId)) result.add(d);
+        result.sort(Comparator.comparing(d -> d.date));
+        return result;
+    }
+
+    /**
+     * Remove a deadline by id.
+     * Phase 2: deleteDoc(doc(db, "users", uid, "deadlines", id)) in script.js
+     */
+    public static boolean removeDeadline(String id) {
+        return deadlines.removeIf(d -> d.id.equals(id));
+    }
+
+
+    // ══════════════════════════════════════════
+    //  FILE STORAGE (JSON)
+    //  Phase 1: reads/writes local JSON files
+    //  Phase 2: replaced by Firebase Firestore
+    // ══════════════════════════════════════════
+
+    /** Save all buildings to buildings.json */
+    public static void saveBuildings() {
+        try {
+            Files.createDirectories(Paths.get(DATA_DIR));
+            StringBuilder sb = new StringBuilder("[\n");
+            for (int i = 0; i < buildings.size(); i++) {
+                sb.append("  ").append(buildings.get(i).toJSON());
+                if (i < buildings.size() - 1) sb.append(",");
+                sb.append("\n");
+            }
+            sb.append("]");
+            Files.writeString(Paths.get(BUILDINGS_FILE), sb.toString());
+            System.out.println("Saved " + buildings.size() + " buildings to " + BUILDINGS_FILE);
+        } catch (IOException e) {
+            System.err.println("Error saving buildings: " + e.getMessage());
         }
     }
-    return results;
-}
 
-// Add a new review to a building and save to file
-// Mirrors: submitReview() in script.js
-// but persists the review to disk instead of memory
-bool addReviewToBuilding(vector<Building>& buildings, int buildingId,
-                          int stars, int day, int month, int year, const string& text)
-{
-    Building* b = findBuildingById(buildings, buildingId);
-    if (!b) {
-        cerr << "Building with id " << buildingId << " not found." << endl;
-        return false;
+    /** Save all deadlines to deadlines.json */
+    public static void saveDeadlines() {
+        try {
+            Files.createDirectories(Paths.get(DATA_DIR));
+            StringBuilder sb = new StringBuilder("[\n");
+            for (int i = 0; i < deadlines.size(); i++) {
+                sb.append("  ").append(deadlines.get(i).toJSON());
+                if (i < deadlines.size() - 1) sb.append(",");
+                sb.append("\n");
+            }
+            sb.append("]");
+            Files.writeString(Paths.get(DEADLINES_FILE), sb.toString());
+        } catch (IOException e) {
+            System.err.println("Error saving deadlines: " + e.getMessage());
+        }
     }
 
-    Review r(stars, day, month, year, text);
-    b->addReview(r);
-    saveBuildings(buildings);
-    return true;
-}
-
-// Returns all buildings as a JSON array
-// This is what Phase 2 will send to the frontend
-// as the response to a search API call
-json buildingsToJSON(const vector<Building>& buildings) {
-    json arr = json::array();
-    for (const Building& b : buildings)
-        arr.push_back(b.toJSON());
-    return arr;
-}
-
-
-// ══════════════════════════════════════════════
-//  SEED DATA
-//  Populates the JSON file with the same 4
-//  buildings that currently live in script.js
-//  Run once to create buildings.json
-// ══════════════════════════════════════════════
-
-void seedBuildings() {
-    vector<Building> buildings;
-
-    // Building 1 — Sunrise Apartments
-    Building b1("Sunrise Apartments", "142 Oak Street, Downtown",
-                "Apartment", "", "🌅",
-                1200, 2, 1, 850, true,
-                {"Parking", "Gym", "Laundry", "Air Conditioning", "Storage Unit"},
-                "A well-maintained complex in the heart of downtown. Close to public transport and major shopping. Management is responsive and the community is quiet.");
-    b1.addReview(Review(5, 15, 3, 2025, "Great location, responsive landlord. Heating works perfectly all winter."));
-    b1.addReview(Review(4, 10, 1, 2025, "Nice building overall. A bit pricey but worth it for the amenities."));
-    b1.addReview(Review(3, 5,  11, 2024, "Maintenance can be slow on weekends, but they do fix things eventually."));
-    buildings.push_back(b1);
-
-    // Building 2 — Greenview Tower
-    Building b2("Greenview Tower", "78 Elm Avenue, Midtown",
-                "Condo", "", "🏢",
-                1800, 3, 2, 1200, true,
-                {"24/7 Concierge", "Rooftop Terrace", "Pool", "Gym", "Underground Parking"},
-                "Modern high-rise with panoramic city views and upscale finishes. Ideal for professionals. Note: elevator had issues in 2024.");
-    b2.addReview(Review(2, 20, 2, 2025, "Landlord ignored multiple requests about the broken elevator for weeks."));
-    b2.addReview(Review(4, 12, 12, 2024, "Great views and modern interiors. Street noise can be an issue at night."));
-    b2.addReview(Review(4, 8,  10, 2024, "Generally a good place. Management improved a lot in the past year."));
-    buildings.push_back(b2);
-
-    // Building 3 — Lakeside Studios
-    Building b3("Lakeside Studios", "9 Lakeview Road, West End",
-                "Studio", "", "🏡",
-                900, 1, 1, 480, false,
-                {"Lake View", "Pet Friendly", "Bike Storage", "Laundry", "Garden Access"},
-                "Cosy studios with stunning lake views. Perfect for students or solo professionals. The landlord is highly responsive.");
-    b3.addReview(Review(5, 2,  4, 2025, "Best landlord I have ever had. Issues fixed same day. Highly recommend."));
-    b3.addReview(Review(5, 18, 2, 2025, "Super quiet, beautiful views, management genuinely cares about tenants."));
-    buildings.push_back(b3);
-
-    // Building 4 — Heritage Flats
-    Building b4("Heritage Flats", "33 Maple Lane, Old Town",
-                "Apartment", "", "🏛️",
-                1050, 2, 1, 720, true,
-                {"Historic Building", "Shared Garden", "Hardwood Floors", "High Ceilings"},
-                "Charming apartments inside a restored 1920s heritage building. High ceilings, original hardwood floors, and a shared garden.");
-    b4.addReview(Review(4, 22, 3, 2025, "Beautiful building. The character is unmatched. Old heating but it works fine."));
-    b4.addReview(Review(3, 14, 1, 2025, "Lovely place but the pipes are noisy at night. Management was responsive."));
-    buildings.push_back(b4);
-
-    saveBuildings(buildings);
-    cout << "Seed complete — 4 buildings written to " << BUILDINGS_FILE << endl;
-}
-
-
-// ── Main — for testing ────────────────────────────────────────────────────
-
-int main() {
-    cout << "══ Storage Test ══════════════════════" << endl;
-
-    // Seed the JSON file with the 4 buildings from script.js
-    seedBuildings();
-
-    // Load them back and verify
-    vector<Building> buildings = loadBuildings();
-
-    cout << "\n── All buildings ────────────────────" << endl;
-    for (const Building& b : buildings)
-        b.print();
-
-    // Test search — mirrors searchBuilding() in script.js
-    cout << "\n── Search: 'studio' ─────────────────" << endl;
-    vector<Building> results = searchBuildings(buildings, "studio");
-    for (const Building& b : results)
-        b.print();
-
-    // Test adding a review — mirrors submitReview() in script.js
-    cout << "\n── Add review to building 1 ─────────" << endl;
-    addReviewToBuilding(buildings, 1, 5, 1, 5, 2025, "Absolutely loved living here.");
-    Building* b = findBuildingById(buildings, 1);
-    if (b) {
-        cout << "Updated rating: " << b->getAverageRating() << "/5" << endl;
-        cout << "Reviews:" << endl;
-        for (const Review& r : b->getReviews())
-            r.print();
+    /** Print all buildings.json contents to terminal */
+    public static void printJsonFile() {
+        try {
+            String content = Files.readString(Paths.get(BUILDINGS_FILE));
+            System.out.println(content);
+        } catch (IOException e) {
+            System.out.println("No buildings file found yet.");
+        }
     }
 
-    // Test JSON output for frontend
-    cout << "\n── JSON for building 3 ──────────────" << endl;
-    Building* b3 = findBuildingById(buildings, 3);
-    if (b3)
-        cout << b3->toJSON().dump(2) << endl;
 
-    return 0;
+    // ══════════════════════════════════════════
+    //  SEED DATA
+    //  Populates the store with the 4 buildings
+    //  that were previously hardcoded in script.js
+    //  Run once to create buildings.json
+    // ══════════════════════════════════════════
+
+    public static void seedBuildings() {
+        buildings.clear();
+
+        // Building 1 — Sunrise Apartments
+        Building b1 = new Building(
+            "Sunrise Apartments", "142 Oak Street, Downtown",
+            "Apartment", "", "🌅",
+            1200, 2, 1, 850, true,
+            Arrays.asList("Parking", "Gym", "Laundry", "Air Conditioning", "Storage Unit"),
+            "A well-maintained complex in the heart of downtown. Close to public transport and major shopping. Management is responsive and the community is quiet."
+        );
+        b1.addReview(new Review(b1.id, 5, 15, 3, 2025, "Great location, responsive landlord. Heating works perfectly all winter.", "user1"));
+        b1.addReview(new Review(b1.id, 4, 10, 1, 2025, "Nice building overall. A bit pricey but worth it for the amenities.", "user2"));
+        b1.addReview(new Review(b1.id, 3, 5,  11, 2024, "Maintenance can be slow on weekends, but they do fix things eventually.", "user3"));
+        buildings.add(b1);
+
+        // Building 2 — Greenview Tower
+        Building b2 = new Building(
+            "Greenview Tower", "78 Elm Avenue, Midtown",
+            "Condo", "", "🏢",
+            1800, 3, 2, 1200, true,
+            Arrays.asList("24/7 Concierge", "Rooftop Terrace", "Pool", "Gym", "Underground Parking"),
+            "Modern high-rise with panoramic city views. Ideal for professionals. Note: elevator had issues in 2024 — worth asking management about current status."
+        );
+        b2.addReview(new Review(b2.id, 2, 20, 2, 2025, "Landlord ignored multiple requests about the broken elevator for weeks.", "user4"));
+        b2.addReview(new Review(b2.id, 4, 12, 12, 2024, "Great views and modern interiors. Street noise can be an issue at night.", "user5"));
+        b2.addReview(new Review(b2.id, 4, 8,  10, 2024, "Generally a good place. Management improved a lot in the past year.", "user6"));
+        buildings.add(b2);
+
+        // Building 3 — Lakeside Studios
+        Building b3 = new Building(
+            "Lakeside Studios", "9 Lakeview Road, West End",
+            "Studio", "", "🏡",
+            900, 1, 1, 480, false,
+            Arrays.asList("Lake View", "Pet Friendly", "Bike Storage", "Laundry", "Garden Access"),
+            "Cosy studios with stunning lake views. Perfect for students or solo professionals. The landlord is highly responsive."
+        );
+        b3.addReview(new Review(b3.id, 5, 2,  4, 2025, "Best landlord I have ever had. Issues fixed same day. Highly recommend.", "user7"));
+        b3.addReview(new Review(b3.id, 5, 18, 2, 2025, "Super quiet, beautiful views, management genuinely cares about tenants.", "user8"));
+        buildings.add(b3);
+
+        // Building 4 — Heritage Flats
+        Building b4 = new Building(
+            "Heritage Flats", "33 Maple Lane, Old Town",
+            "Apartment", "", "🏛️",
+            1050, 2, 1, 720, true,
+            Arrays.asList("Historic Building", "Shared Garden", "Hardwood Floors", "High Ceilings"),
+            "Charming apartments inside a restored 1920s heritage building. High ceilings, original hardwood floors, and a shared garden."
+        );
+        b4.addReview(new Review(b4.id, 4, 22, 3, 2025, "Beautiful building. The character is unmatched. Old heating but it works fine.", "user9"));
+        b4.addReview(new Review(b4.id, 3, 14, 1, 2025, "Lovely place but the pipes are noisy at night. Management was responsive.", "user10"));
+        buildings.add(b4);
+
+        saveBuildings();
+        System.out.println("Seed complete — " + buildings.size() + " buildings written to " + BUILDINGS_FILE);
+    }
+
+
+    // ══════════════════════════════════════════
+    //  HELPER
+    // ══════════════════════════════════════════
+
+    /** Escapes special characters for JSON strings */
+    private static String esc(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
+
+
+    // ══════════════════════════════════════════
+    //  MAIN — terminal demonstration
+    //  Compile:  javac Storage.java
+    //  Run:      java Storage
+    // ══════════════════════════════════════════
+
+    public static void main(String[] args) {
+
+        System.out.println("╔══════════════════════════════════════════╗");
+        System.out.println("║   Rental Contract Helper — Backend       ║");
+        System.out.println("║   Storage.java — Terminal Mode           ║");
+        System.out.println("╚══════════════════════════════════════════╝");
+
+        // Test 1: Seed the 4 buildings from script.js into JSON
+        System.out.println("\n── Test 1: Seed Buildings ────────────────────");
+        seedBuildings();
+
+        // Test 2: Print all buildings
+        System.out.println("\n── Test 2: All Buildings ─────────────────────");
+        for (Building b : getAllBuildings()) b.print();
+
+        // Test 3: Search
+        System.out.println("\n── Test 3: Search 'studio' ───────────────────");
+        for (Building b : searchBuildings("studio")) b.print();
+
+        // Test 4: Add a new review
+        System.out.println("\n── Test 4: Add Review to Building 1 ──────────");
+        String bid = buildings.get(0).id;
+        addReview(bid, 5, 1, 5, 2025, "Absolutely loved living here.", "testUser");
+        Building updated = findBuildingById(bid);
+        if (updated != null) {
+            System.out.printf("  Updated rating: %.1f/5 (%d reviews)%n",
+                updated.avgRating, updated.reviewCount);
+            for (Review r : updated.reviews) r.print();
+        }
+
+        // Test 5: Deadlines
+        System.out.println("\n── Test 5: Deadlines ─────────────────────────");
+        addDeadline("Lease Renewal",  "2025-12-01", "renewal",    "testUser");
+        addDeadline("Rent Due",       "2025-05-05", "payment",    "testUser");
+        addDeadline("Inspection",     "2025-05-20", "inspection", "testUser");
+        List<Deadline> userDeadlines = getDeadlines("testUser");
+        System.out.println("  Deadlines for testUser:");
+        for (Deadline d : userDeadlines) d.print();
+
+        // Test 6: Print the JSON file
+        System.out.println("\n── Test 6: buildings.json contents ───────────");
+        printJsonFile();
+
+        // Test 7: Combined — use BackendFunctions with a building from Storage
+        System.out.println("── Test 7: Combined — Rent Projection for Building 1 ──");
+        Building b1 = buildings.get(0);
+        System.out.printf("  Building: %s ($%d/mo)%n", b1.name, b1.monthlyRent);
+        BackendFunctions.ProjectionResult proj =
+            BackendFunctions.projectRent(b1.monthlyRent, 5.0, 24, 30000.0);
+        BackendFunctions.printProjection(proj, b1.monthlyRent);
+    }
 }
